@@ -1,4 +1,4 @@
-const { fetchAll, fetchBootstrap, fetchManagerInfo, fetchManagerPicks, fetchManagerTransfers, fetchMyTeam, fplLogin, getFplLoginError, getFplLoginDebug, setFplSession, startAuthCodeFlow, exchangeAuthCode, getUserSession, clearUserSession } = require('./fpl-api');
+const { fetchAll, fetchBootstrap, fetchFixtures, fetchManagerInfo, fetchManagerPicks, fetchManagerTransfers, fetchMyTeam, fplLogin, getFplLoginError, getFplLoginDebug, setFplSession, startAuthCodeFlow, exchangeAuthCode, getUserSession, clearUserSession } = require('./fpl-api');
 const { scoreAllPlayers } = require('./scoring');
 const {
   addToWatchlist, removeFromWatchlist, getWatchlist, getWatchlistCount,
@@ -221,7 +221,7 @@ function registerCommands(bot) {
     // User belum terdaftar & tidak kirim FPL ID → tampilkan welcome
     if (!user && !isOwner(ctx)) {
       return ctx.replyWithHTML([
-        `👋 <b>Selamat Datang di FPL Differential Bot!</b>`,
+        `👋 <b>Selamat Datang di Mallempu Bot!</b>`,
         ``,
         `Halo <b>${ctx.from.first_name || 'Sobat FPL'}</b>! Bot ini akan membantu kamu:`,
         ``,
@@ -248,7 +248,7 @@ function registerCommands(bot) {
     // User sudah terdaftar atau owner → tampilkan menu
     const userInfo = user ? ` (FPL ID: <code>${user.fpl_id}</code>)` : '';
     ctx.replyWithHTML([
-      `<b>⚽ FPL Differential Bot</b>${userInfo}`,
+      `<b>⚽ Mallempu Bot</b>${userInfo}`,
       '',
       '💡 Ketik /help untuk panduan interaktif lengkap.',
       '',
@@ -312,7 +312,7 @@ function registerCommands(bot) {
   bot.command('help', ctx => {
     const { Markup } = require('telegraf');
     ctx.replyWithHTML(
-      '<b>📖 Bantuan FPL Differential Bot</b>\n\n' +
+      '<b>📖 Bantuan Mallempu Bot</b>\n\n' +
       'Pilih kategori di bawah untuk melihat panduan:',
       Markup.inlineKeyboard([
         [Markup.button.callback('📊 Analisa Pemain', 'help_analysis')],
@@ -414,7 +414,7 @@ function registerCommands(bot) {
     const { Markup } = require('telegraf');
     ctx.answerCbQuery();
     ctx.editMessageText(
-      '<b>📖 Bantuan FPL Differential Bot</b>\n\n' +
+      '<b>📖 Bantuan Mallempu Bot</b>\n\n' +
       'Pilih kategori di bawah untuk melihat panduan:',
       {
         parse_mode: 'HTML',
@@ -2356,6 +2356,232 @@ function registerCommands(bot) {
       ctx.reply('❌ Terjadi kesalahan saat login. Coba /fpllogin lagi.');
     }
   });
+
+  // =====================
+  // 6 NEW FEATURES
+  // =====================
+
+  const { generateExpertPicks } = require('./expert-picks');
+  const { predictPriceChanges, flagSquadPlayers } = require('./price-warnings');
+  const { predictLineup, predictAllLineups } = require('./predicted-lineups');
+  const { analyzeChipTiming } = require('./chip-planner');
+  const { buildTransferPlan } = require('./transfer-planner');
+  const { simulateTransfers } = require('./whatif');
+
+  // /expertpicks (alias /picks)
+  const expertPicksHandler = async ctx => {
+    try {
+      ctx.reply('⏳ Menganalisa expert picks...');
+      const { scored, teams, currentGw } = await getScoredPlayers();
+      const picks = generateExpertPicks(scored, currentGw);
+      ctx.replyWithHTML(fmt.expertPicksCard(picks));
+    } catch (err) {
+      console.error('Error /expertpicks:', err.message);
+      ctx.reply('❌ Gagal menganalisa expert picks. Coba lagi nanti.');
+    }
+  };
+  bot.command('expertpicks', expertPicksHandler);
+  bot.command('picks', expertPicksHandler);
+
+  // /pricewarning (alias /prices)
+  const priceWarningHandler = async ctx => {
+    try {
+      ctx.reply('⏳ Menganalisa perubahan harga...');
+      const { scored } = await getScoredPlayers();
+      let result = predictPriceChanges(scored);
+
+      // Flag squad/watchlist players if user is registered
+      const chatId = String(ctx.from.id);
+      const user = getUser(chatId);
+      if (user?.fpl_id) {
+        try {
+          const { scored: s, currentGw } = await getScoredPlayers();
+          const bootstrap = await fetchBootstrap();
+          const nextGw = bootstrap.events.find(e => e.is_next)?.id || currentGw;
+          let picks;
+          try { picks = await fetchManagerPicks(user.fpl_id, nextGw); } catch {}
+          if (!picks) try { picks = await fetchManagerPicks(user.fpl_id, currentGw); } catch {}
+          const squadIds = picks?.picks?.map(p => p.element) || [];
+          const watchlist = getWatchlist(chatId);
+          const watchIds = watchlist.map(w => w.player_id);
+          result = flagSquadPlayers(result, squadIds, watchIds);
+        } catch {}
+      }
+
+      ctx.replyWithHTML(fmt.priceWarningCard(result.risers, result.fallers));
+    } catch (err) {
+      console.error('Error /pricewarning:', err.message);
+      ctx.reply('❌ Gagal menganalisa perubahan harga. Coba lagi nanti.');
+    }
+  };
+  bot.command('pricewarning', priceWarningHandler);
+  bot.command('prices', priceWarningHandler);
+
+  // /lineup <team>
+  bot.command('lineup', async ctx => {
+    const input = ctx.message.text.replace(/^\/lineup\s*/i, '').trim();
+    if (!input) {
+      return ctx.replyWithHTML('Gunakan: <code>/lineup [nama tim]</code>\nContoh: <code>/lineup Arsenal</code> atau <code>/lineup ARS</code>');
+    }
+
+    try {
+      ctx.reply('⏳ Memprediksi lineup...');
+      const { scored, teams } = await getScoredPlayers();
+      const teamsArr = Object.values(teams);
+
+      const q = input.toLowerCase();
+      const team = teamsArr.find(t =>
+        t.name.toLowerCase() === q ||
+        t.short_name.toLowerCase() === q ||
+        t.name.toLowerCase().includes(q)
+      );
+      if (!team) {
+        return ctx.reply(`❌ Tim "${input}" tidak ditemukan. Gunakan nama lengkap atau kode (contoh: ARS, LIV, MCI).`);
+      }
+
+      const teamPlayers = scored.filter(p => p.team === team.id);
+      const maxStarts = Math.max(...teamPlayers.map(p => p.starts || 0), 1);
+      const lineup = predictLineup(teamPlayers, maxStarts, team.name);
+
+      if (!lineup) {
+        return ctx.reply('❌ Tidak cukup data untuk memprediksi lineup tim ini.');
+      }
+
+      ctx.replyWithHTML(fmt.lineupCard(lineup));
+    } catch (err) {
+      console.error('Error /lineup:', err.message);
+      ctx.reply('❌ Gagal memprediksi lineup. Coba lagi nanti.');
+    }
+  });
+
+  // /chipplan (alias /chips)
+  const chipPlanHandler = async ctx => {
+    try {
+      ctx.reply('⏳ Menganalisa chip planning...');
+      const { scored, teams } = await getScoredPlayers();
+      const fixtures = await fetchFixtures();
+      const result = analyzeChipTiming(fixtures, Object.values(teams), scored);
+      ctx.replyWithHTML(fmt.chipPlanCard(result));
+    } catch (err) {
+      console.error('Error /chipplan:', err.message);
+      ctx.reply('❌ Gagal menganalisa chip plan. Coba lagi nanti.');
+    }
+  };
+  bot.command('chipplan', chipPlanHandler);
+  bot.command('chips', chipPlanHandler);
+
+  // /plan [managerId] (alias /transferplan)
+  const transferPlanHandler = async ctx => {
+    const input = ctx.message.text.replace(/^\/(plan|transferplan)\s*/i, '').trim();
+    const managerId = parseInt(input) || getUserFplId(ctx);
+    if (!managerId || isNaN(managerId)) {
+      return ctx.replyWithHTML(
+        'FPL ID belum terdaftar.\n\n' +
+        'Gunakan <code>/start [FPL ID]</code> untuk mendaftar.\n' +
+        'Atau: <code>/plan [FPL ID]</code>'
+      );
+    }
+
+    try {
+      ctx.reply('⏳ Membuat transfer plan...');
+      const [{ scored, teams, currentGw }] = await Promise.all([getScoredPlayers()]);
+      const fixtures = await fetchFixtures();
+      const bootstrap = await fetchBootstrap();
+      const nextGw = bootstrap.events.find(e => e.is_next)?.id || currentGw;
+
+      // Get squad
+      let picks;
+      const gwsToTry = [nextGw, currentGw];
+      for (let gw = currentGw - 1; gw >= Math.max(1, currentGw - 3); gw--) gwsToTry.push(gw);
+      for (const gw of gwsToTry) {
+        if (picks) break;
+        try { picks = await fetchManagerPicks(managerId, gw); } catch {}
+      }
+      if (!picks) return ctx.reply('❌ Belum ada data squad.');
+
+      const bank = picks.entry_history?.bank || 0;
+      const planEnd = Math.min(nextGw + 5, 38); // Plan next 6 GWs
+      const result = buildTransferPlan(picks.picks, scored, fixtures, Object.values(teams), nextGw, planEnd, bank);
+      ctx.replyWithHTML(fmt.transferPlanCard(result));
+    } catch (err) {
+      console.error('Error /plan:', err.message);
+      if (err.response?.status === 404) return ctx.reply(`❌ FPL ID ${managerId} tidak ditemukan.`);
+      ctx.reply('❌ Gagal membuat transfer plan. Coba lagi nanti.');
+    }
+  };
+  bot.command('plan', transferPlanHandler);
+  bot.command('transferplan', transferPlanHandler);
+
+  // /whatif <PlayerOut> > <PlayerIn>
+  bot.command('whatif', async ctx => {
+    const input = ctx.message.text.replace(/^\/whatif\s*/i, '').trim();
+    if (!input || !input.includes('>')) {
+      return ctx.replyWithHTML(
+        'Gunakan: <code>/whatif [pemain keluar] &gt; [pemain masuk]</code>\n' +
+        'Contoh: <code>/whatif Salah &gt; Palmer</code>\n' +
+        'Multi: <code>/whatif Salah &gt; Palmer, Haaland &gt; Isak</code>'
+      );
+    }
+
+    const managerId = getUserFplId(ctx);
+    if (!managerId) {
+      return ctx.replyWithHTML('FPL ID belum terdaftar. Gunakan <code>/start [FPL ID]</code>');
+    }
+
+    try {
+      ctx.reply('⏳ Menjalankan simulasi...');
+      const { scored, teams, currentGw } = await getScoredPlayers();
+      const bootstrap = await fetchBootstrap();
+      const nextGw = bootstrap.events.find(e => e.is_next)?.id || currentGw;
+
+      // Get squad
+      let picks;
+      const chatId = String(ctx.from.id);
+      const user = getUser(chatId);
+      if (managerId === user?.fpl_id && getUserSession(chatId)) {
+        try {
+          const myTeam = await fetchMyTeam(managerId, chatId);
+          if (myTeam?.picks) picks = { picks: myTeam.picks, entry_history: null };
+        } catch {}
+      }
+      if (!picks) {
+        const gwsToTry = [nextGw, currentGw];
+        for (const gw of gwsToTry) { if (picks) break; try { picks = await fetchManagerPicks(managerId, gw); } catch {} }
+      }
+      if (!picks) return ctx.reply('❌ Belum ada data squad.');
+
+      // Parse transfers: "Salah > Palmer, Haaland > Isak"
+      const parts = input.split(',').map(s => s.trim());
+      const transfers = [];
+      for (const part of parts) {
+        const [outName, inName] = part.split('>').map(s => s.trim());
+        if (!outName || !inName) continue;
+
+        const outResult = findPlayer(scored, outName);
+        const inResult = findPlayer(scored, inName);
+
+        if (!outResult || Array.isArray(outResult)) {
+          return ctx.reply(`❌ Pemain "${outName}" ${Array.isArray(outResult) ? 'ambigu — coba nama lebih spesifik' : 'tidak ditemukan'}.`);
+        }
+        if (!inResult || Array.isArray(inResult)) {
+          return ctx.reply(`❌ Pemain "${inName}" ${Array.isArray(inResult) ? 'ambigu — coba nama lebih spesifik' : 'tidak ditemukan'}.`);
+        }
+
+        transfers.push({ outId: outResult.id, inId: inResult.id });
+      }
+
+      if (transfers.length === 0) {
+        return ctx.reply('❌ Format salah. Contoh: /whatif Salah > Palmer');
+      }
+
+      const bank = picks.entry_history?.bank || 0;
+      const result = simulateTransfers(picks.picks, scored, transfers, bank);
+      ctx.replyWithHTML(fmt.whatIfCard(result));
+    } catch (err) {
+      console.error('Error /whatif:', err.message);
+      ctx.reply('❌ Gagal menjalankan simulasi. Coba lagi nanti.');
+    }
+  });
 }
 
-module.exports = { registerCommands, getScoredPlayers };
+module.exports = { registerCommands, getScoredPlayers, findPlayer };

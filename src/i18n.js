@@ -11,7 +11,7 @@ const strings = {
     loading: '⏳ Mengambil data...',
 
     // /start
-    welcome_title: '👋 <b>Selamat Datang di FPL Differential Bot!</b>',
+    welcome_title: '👋 <b>Selamat Datang di Mallempu Bot!</b>',
     welcome_intro: (name) => `Halo <b>${name}</b>! Bot ini akan membantu kamu:`,
     welcome_features: [
       '⚽ Analisa pemain dengan metrik canggih + data 3 musim',
@@ -42,7 +42,7 @@ const strings = {
     help_tip: '💡 Ketik /help untuk panduan interaktif lengkap.',
 
     // /help
-    help_title: '<b>📖 Bantuan FPL Differential Bot</b>\n\nPilih kategori di bawah untuk melihat panduan:',
+    help_title: '<b>📖 Bantuan Mallempu Bot</b>\n\nPilih kategori di bawah untuk melihat panduan:',
     help_btn_analysis: '📊 Analisa Pemain',
     help_btn_squad: '👤 Squad & Transfer',
     help_btn_news: '📰 Berita & Info',
@@ -105,7 +105,7 @@ const strings = {
     loading: '⏳ Fetching data...',
 
     // /start
-    welcome_title: '👋 <b>Welcome to FPL Differential Bot!</b>',
+    welcome_title: '👋 <b>Welcome to Mallempu Bot!</b>',
     welcome_intro: (name) => `Hey <b>${name}</b>! This bot helps you with:`,
     welcome_features: [
       '⚽ Advanced player analysis with 3-season historical data',
@@ -136,7 +136,7 @@ const strings = {
     help_tip: '💡 Type /help for an interactive guide.',
 
     // /help
-    help_title: '<b>📖 FPL Differential Bot Help</b>\n\nSelect a category below:',
+    help_title: '<b>📖 Mallempu Bot Help</b>\n\nSelect a category below:',
     help_btn_analysis: '📊 Player Analysis',
     help_btn_squad: '👤 Squad & Transfer',
     help_btn_news: '📰 News & Info',

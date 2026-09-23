@@ -2,12 +2,14 @@ require('dotenv').config();
 
 const { Telegraf } = require('telegraf');
 const crypto = require('crypto');
+const express = require('express');
 const http = require('http');
 const { registerCommands } = require('./commands');
 const { registerAdminCommands } = require('./admin');
 const { startScheduler } = require('./scheduler');
 const { restoreSessions } = require('./fpl-api');
 const { getAllFplTokens } = require('./database');
+const webRoutes = require('./web/routes');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
@@ -39,6 +41,10 @@ bot.catch((err, ctx) => {
   trackError(`bot:${ctx.updateType}`, err);
 });
 
+// === Express Web App ===
+const app = express();
+app.use(express.json());
+
 // Start
 async function main() {
   try {
@@ -48,53 +54,21 @@ async function main() {
       const webhookPath = `/webhook/${BOT_TOKEN.split(':')[0]}`;
       const webhookUrl = `https://${WEBHOOK_DOMAIN}${webhookPath}`;
 
-      // HTTP server dengan webhook handler
-      const server = http.createServer((req, res) => {
-        if (req.url === '/health' || req.url === '/') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          const m = getMetrics();
-          res.end(JSON.stringify({ status: 'ok', uptime: m.uptime, memory_mb: m.memoryMB, commands: m.commands.total }));
-        } else if (req.url === webhookPath && req.method === 'POST') {
-          // Verify webhook secret token from Telegram
-          const token = req.headers['x-telegram-bot-api-secret-token'];
-          if (token !== webhookSecret) {
-            res.writeHead(403);
-            res.end();
-            return;
-          }
-
-          const MAX_BODY = 1024 * 1024; // 1MB limit
-          let body = '';
-          let exceeded = false;
-          req.on('data', chunk => {
-            body += chunk;
-            if (body.length > MAX_BODY) {
-              exceeded = true;
-              req.destroy();
-            }
-          });
-          req.on('end', () => {
-            if (exceeded) {
-              res.writeHead(413);
-              res.end();
-              return;
-            }
-            try {
-              bot.handleUpdate(JSON.parse(body), res);
-            } catch (e) {
-              console.error('Webhook error:', e.message);
-              res.writeHead(400);
-              res.end();
-            }
-          });
-        } else {
-          res.writeHead(404);
-          res.end();
+      // Telegram webhook handler via Express
+      app.post(webhookPath, (req, res) => {
+        const token = req.headers['x-telegram-bot-api-secret-token'];
+        if (token !== webhookSecret) {
+          return res.sendStatus(403);
         }
+        bot.handleUpdate(req.body, res);
       });
 
+      // Web app routes (after webhook, before 404)
+      app.use(webRoutes);
+
+      const server = http.createServer(app);
       server.listen(PORT, () => {
-        console.log(`🌐 Server on port ${PORT}`);
+        console.log(`🌐 Server on port ${PORT} (Bot webhook + Web app)`);
       });
 
       await bot.telegram.setWebhook(webhookUrl, { secret_token: webhookSecret });
@@ -102,24 +76,17 @@ async function main() {
 
     } else {
       // === POLLING MODE (Lokal/Development) ===
-      const server = http.createServer((req, res) => {
-        if (req.url === '/health' || req.url === '/') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          const m = getMetrics();
-          res.end(JSON.stringify({ status: 'ok', uptime: m.uptime, memory_mb: m.memoryMB, commands: m.commands.total }));
-        } else {
-          res.writeHead(404);
-          res.end();
-        }
-      });
+      // Web app routes
+      app.use(webRoutes);
 
+      const server = http.createServer(app);
       server.listen(PORT, () => {
-        console.log(`🌐 Health check server on port ${PORT}`);
+        console.log(`🌐 Web app running on http://localhost:${PORT}`);
       });
 
       await bot.telegram.deleteWebhook({ drop_pending_updates: false });
       await bot.launch();
-      console.log('🔗 Polling mode');
+      console.log('🔗 Bot polling mode');
     }
 
     // Restore FPL sessions from DB
@@ -131,7 +98,7 @@ async function main() {
     }
 
     startScheduler(bot, CHAT_ID);
-    console.log('🤖 FPL Differential Bot is running! (v7)');
+    console.log('🤖 Mallempu Bot is running! (v7)');
     console.log(`📋 Admin CHAT_ID: ${CHAT_ID || '(not set)'}`);
 
     // Kirim notifikasi ke admin

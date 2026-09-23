@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Mallempu - Squad Analyzer</title>
+  <meta name="description" content="FPL squad analyzer with quality scoring, differential picks, and real-time data">
+  <meta name="theme-color" content="#111318">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x26BD;</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <h1><span class="logo">&#x26BD;</span> Mallempu</h1>
+    <div class="header-actions">
+      <input type="text" id="player-search-input" class="search-input header-search"
+             placeholder="Search player..." style="width:160px;padding:7px 12px;font-size:0.8rem"
+             oninput="handlePlayerSearch(event)">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Switch theme" id="theme-btn">&#127769;</button>
+      <div id="auth-area">
+        <button class="btn btn-primary" onclick="openAuthModal('login')" style="padding:6px 14px;font-size:0.78rem" id="login-btn">Login</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Gameweek Bar -->
+    <div class="gw-bar" id="gw-info">
+      <span class="gw-label">Loading gameweek...</span>
+    </div>
+
+    <!-- Search Results -->
+    <div id="search-results"></div>
+
+    <!-- Navigation: free tabs first, then premium -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-tab="squad">&#127944; Squad</button>
+      <button class="nav-tab" data-tab="players">&#127942; Top</button>
+      <button class="nav-tab" data-tab="prices">&#128200; Prices</button>
+      <span class="nav-divider"></span>
+      <button class="nav-tab nav-tab-pro" data-tab="expert"><span class="pro-icon">&#9733;</span> Expert</button>
+      <button class="nav-tab nav-tab-pro" data-tab="differentials"><span class="pro-icon">&#9733;</span> Diff</button>
+      <button class="nav-tab nav-tab-pro" data-tab="lineups"><span class="pro-icon">&#9733;</span> Lineup</button>
+      <button class="nav-tab nav-tab-pro" data-tab="planner"><span class="pro-icon">&#9733;</span> Plan</button>
+      <button class="nav-tab nav-tab-pro" data-tab="chips"><span class="pro-icon">&#9733;</span> Chips</button>
+    </div>
+
+    <!-- Tab: Squad -->
+    <div class="tab-content" id="tab-squad">
+      <div class="search-section">
+        <input type="text" id="fpl-id-input" class="search-input" placeholder="Enter FPL Manager ID..."
+               onkeydown="handleSquadSearch(event)">
+        <button class="btn btn-primary" onclick="handleSquadSearch()">View Squad</button>
+      </div>
+      <div id="squad-content">
+        <div class="empty-state">
+          <div class="icon">&#127944;</div>
+          <h3 style="font-size:1rem;margin-bottom:6px">Enter your FPL ID to view squad</h3>
+          <p style="color:var(--text-muted);font-size:0.82rem;line-height:1.6">
+            Find your ID from the URL when viewing your team:<br>
+            <code style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;font-size:0.78rem">fantasy.premierleague.com/entry/<strong>YOUR_ID</strong>/event/...</code>
+          </p>
+          <p style="color:var(--text-muted);margin-top:12px;font-size:0.75rem">
+            Auto-refreshes every 2 minutes for live updates
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Top Players -->
+    <div class="tab-content hidden" id="tab-players">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <h2 style="font-size:1rem">Top Players</h2>
+        <div class="pos-filters">
+          <button class="pos-filter active" data-pos="0" onclick="loadTopPlayers(0)">All</button>
+          <button class="pos-filter" data-pos="1" onclick="loadTopPlayers(1)">GK</button>
+          <button class="pos-filter" data-pos="2" onclick="loadTopPlayers(2)">DEF</button>
+          <button class="pos-filter" data-pos="3" onclick="loadTopPlayers(3)">MID</button>
+          <button class="pos-filter" data-pos="4" onclick="loadTopPlayers(4)">FWD</button>
+        </div>
+      </div>
+      <div id="players-content">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Differentials -->
+    <div class="tab-content hidden" id="tab-differentials">
+      <div style="margin-bottom:14px">
+        <h2 style="font-size:1rem">Differential Picks</h2>
+        <p style="color:var(--text-muted);font-size:0.8rem">High quality, low ownership (&lt;12%)</p>
+      </div>
+      <div id="differentials-content">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Expert Picks -->
+    <div class="tab-content hidden" id="tab-expert">
+      <div style="margin-bottom:14px">
+        <h2 style="font-size:1rem">Expert Picks</h2>
+        <p style="color:var(--text-muted);font-size:0.8rem">Captain, transfers, differentials, budget picks</p>
+      </div>
+      <div id="expert-content">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Price Watch -->
+    <div class="tab-content hidden" id="tab-prices">
+      <div style="margin-bottom:14px">
+        <h2 style="font-size:1rem">Price Warnings</h2>
+        <p style="color:var(--text-muted);font-size:0.8rem">Players likely to rise or fall in price</p>
+      </div>
+      <div id="prices-content">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Lineups -->
+    <div class="tab-content hidden" id="tab-lineups">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <h2 style="font-size:1rem">Predicted Lineups</h2>
+        <select id="lineup-team-select" class="search-input" style="width:200px;padding:7px 12px;flex:0 0 auto" onchange="loadTeamLineup(this.value)">
+          <option value="">Select team...</option>
+        </select>
+      </div>
+      <div id="lineups-content">
+        <div class="empty-state">
+          <div class="icon">&#9917;</div>
+          <h3 style="font-size:1rem">Select a team</h3>
+          <p style="color:var(--text-muted);margin-top:6px;font-size:0.8rem">Based on starts, minutes, and availability</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Planner -->
+    <div class="tab-content hidden" id="tab-planner">
+      <div style="margin-bottom:14px">
+        <h2 style="font-size:1rem">Transfer Planner</h2>
+        <p style="color:var(--text-muted);font-size:0.8rem">Multi-GW strategy based on fixture swings</p>
+      </div>
+      <div class="search-section">
+        <input type="text" id="planner-id-input" class="search-input" placeholder="Enter FPL Manager ID..."
+               onkeydown="if(event.key==='Enter')loadTransferPlan()">
+        <button class="btn btn-primary" onclick="loadTransferPlan()">Generate Plan</button>
+      </div>
+      <div id="planner-content"></div>
+    </div>
+
+    <!-- Tab: Chip Plan -->
+    <div class="tab-content hidden" id="tab-chips">
+      <div style="margin-bottom:14px">
+        <h2 style="font-size:1rem">Chip Planning GW1-38</h2>
+        <p style="color:var(--text-muted);font-size:0.8rem">Optimal timing for WC, BB, TC, FH</p>
+      </div>
+      <div id="chips-content">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+    </div>
+
+    <!-- What-If Modal -->
+    <div class="modal-overlay" id="whatif-modal">
+      <div class="modal" style="max-width:480px">
+        <button class="modal-close" onclick="closeWhatIf()">&times;</button>
+        <h3 style="margin-bottom:14px;font-size:1rem">What-If Simulator</h3>
+        <div id="whatif-body">
+          <div style="margin-bottom:10px">
+            <label style="font-size:0.8rem;color:var(--text-muted)">Transfer Out</label>
+            <input type="text" id="whatif-out" class="search-input" placeholder="Player to remove..." style="margin-top:4px">
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:0.8rem;color:var(--text-muted)">Transfer In</label>
+            <input type="text" id="whatif-in" class="search-input" placeholder="Player to add..." style="margin-top:4px">
+          </div>
+          <button class="btn btn-primary" onclick="runWhatIf()" style="width:100%">Simulate Transfer</button>
+          <div id="whatif-result" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Player Detail Modal -->
+  <div class="modal-overlay" id="player-modal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal" style="max-width:400px">
+      <button class="modal-close" onclick="closeAuthModal()">&times;</button>
+      <div id="auth-modal-body">
+        <!-- Login Form -->
+        <div id="auth-login">
+          <h3 style="margin-bottom:4px;font-size:1rem">Login ke Mallempu</h3>
+          <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:16px">Masuk untuk akses fitur premium</p>
+          <div style="margin-bottom:10px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Email</label>
+            <input type="email" id="login-email" class="search-input" placeholder="email@example.com" style="margin-top:4px">
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Password</label>
+            <input type="password" id="login-password" class="search-input" placeholder="Password" style="margin-top:4px"
+                   onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+          <div id="login-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
+          <button class="btn btn-primary" onclick="doLogin()" style="width:100%">Login</button>
+          <p style="text-align:center;margin-top:12px;font-size:0.78rem;color:var(--text-muted)">
+            Belum punya akun? <a href="#" onclick="switchAuthForm('register');return false">Daftar gratis</a>
+          </p>
+        </div>
+        <!-- Register Form -->
+        <div id="auth-register" style="display:none">
+          <h3 style="margin-bottom:4px;font-size:1rem">Daftar ke Mallempu</h3>
+          <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:16px">Buat akun gratis, upgrade ke Pro kapan saja</p>
+          <div style="margin-bottom:10px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Nama</label>
+            <input type="text" id="reg-name" class="search-input" placeholder="Nama kamu" style="margin-top:4px">
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Email</label>
+            <input type="email" id="reg-email" class="search-input" placeholder="email@example.com" style="margin-top:4px">
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Password</label>
+            <input type="password" id="reg-password" class="search-input" placeholder="Minimal 6 karakter" style="margin-top:4px">
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">FPL ID (opsional)</label>
+            <input type="text" id="reg-fplid" class="search-input" placeholder="Bisa diisi nanti" style="margin-top:4px">
+          </div>
+          <div id="reg-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
+          <button class="btn btn-primary" onclick="doRegister()" style="width:100%">Daftar</button>
+          <p style="text-align:center;margin-top:12px;font-size:0.78rem;color:var(--text-muted)">
+            Sudah punya akun? <a href="#" onclick="switchAuthForm('login');return false">Login</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

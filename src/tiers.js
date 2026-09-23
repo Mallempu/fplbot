@@ -60,7 +60,11 @@ const TIERS = {
 };
 
 // Commands that require a specific tier (PRO+)
-const PRO_COMMANDS = ['analyze', 'history', 'compare', 'differentials', 'regression', 'best11', 'suggest'];
+const PRO_COMMANDS = [
+  'analyze', 'history', 'compare', 'differentials', 'regression', 'best11', 'suggest',
+  'expertpicks', 'picks', 'pricewarning', 'prices', 'lineup',
+  'chipplan', 'chips', 'plan', 'transferplan', 'whatif',
+];
 
 function getTierConfig(tierName) {
   return TIERS[tierName] || TIERS.free;
@@ -99,6 +103,12 @@ function formatUpgradeMessage(command, currentTier) {
     `• Analisis regresi (/regression)\n` +
     `• Best Starting XI (/best11)\n` +
     `• Saran transfer (/suggest)\n` +
+    `• Expert Picks mingguan (/expertpicks)\n` +
+    `• Price Warnings (/pricewarning)\n` +
+    `• Predicted Lineups (/lineup)\n` +
+    `• What-If Simulator (/whatif)\n` +
+    `• Transfer Planner (/plan)\n` +
+    `• Chip Planning GW1-38 (/chipplan)\n` +
     `• Watchlist sampai 20 pemain\n\n` +
     `Hubungi @Abulkhaer untuk upgrade.`
   );
@@ -123,6 +133,12 @@ function formatTierList() {
   lines.push('  • Perbandingan pemain (/compare)');
   lines.push('  • Differential picks');
   lines.push('  • Best XI & saran transfer');
+  lines.push('  • Expert Picks mingguan');
+  lines.push('  • Price Warnings');
+  lines.push('  • Predicted Lineups');
+  lines.push('  • What-If Simulator');
+  lines.push('  • Transfer Planner');
+  lines.push('  • Chip Planning GW1-38');
   lines.push('  • Watchlist (20 pemain)');
   lines.push('  • 500 perintah/hari');
   lines.push('');

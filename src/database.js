@@ -102,6 +102,20 @@ function getDb() {
     db.exec("ALTER TABLE user_preferences ADD COLUMN tier TEXT DEFAULT 'free'");
   }
 
+  // Web auth table for website login
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS web_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      fpl_id INTEGER,
+      tier TEXT DEFAULT 'free',
+      created_at TEXT DEFAULT (datetime('now')),
+      last_login TEXT
+    )
+  `);
+
   // Migrasi watchlist: jika tabel lama tanpa chat_id, rebuild
   const watchCols = db.pragma('table_info(watchlist)').map(c => c.name);
   if (!watchCols.includes('chat_id')) {
@@ -370,6 +384,33 @@ function getAllUsers(limit = 50, offset = 0) {
   return getDb().prepare('SELECT * FROM users ORDER BY last_seen DESC LIMIT ? OFFSET ?').all(limit, offset);
 }
 
+// ===== Web Auth =====
+function createWebUser(email, passwordHash, name, fplId) {
+  return getDb().prepare(
+    'INSERT INTO web_users (email, password_hash, name, fpl_id) VALUES (?, ?, ?, ?)'
+  ).run(email.toLowerCase().trim(), passwordHash, name || null, fplId || null);
+}
+
+function getWebUserByEmail(email) {
+  return getDb().prepare('SELECT * FROM web_users WHERE email = ?').get(email.toLowerCase().trim());
+}
+
+function getWebUserById(id) {
+  return getDb().prepare('SELECT id, email, name, fpl_id, tier, created_at, last_login FROM web_users WHERE id = ?').get(id);
+}
+
+function updateWebUserLogin(id) {
+  getDb().prepare("UPDATE web_users SET last_login = datetime('now') WHERE id = ?").run(id);
+}
+
+function updateWebUserTier(id, tier) {
+  getDb().prepare("UPDATE web_users SET tier = ? WHERE id = ?").run(tier, id);
+}
+
+function updateWebUserFplId(id, fplId) {
+  getDb().prepare("UPDATE web_users SET fpl_id = ? WHERE id = ?").run(fplId, id);
+}
+
 module.exports = {
   getDb,
   saveSnapshot,
@@ -400,4 +441,10 @@ module.exports = {
   getUserStats,
   deleteUser,
   getAllUsers,
+  createWebUser,
+  getWebUserByEmail,
+  getWebUserById,
+  updateWebUserLogin,
+  updateWebUserTier,
+  updateWebUserFplId,
 };

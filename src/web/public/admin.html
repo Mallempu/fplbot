@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mallempu Admin</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2699;</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1><span class="logo">&#x2699;</span> Mallempu Admin</h1>
+    <div class="header-actions">
+      <a href="/" class="btn btn-secondary" style="padding:5px 12px;font-size:0.75rem">&#8592; Kembali ke App</a>
+      <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">&#9728;</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Admin Login -->
+    <div id="admin-login-section">
+      <div class="card" style="max-width:400px;margin:60px auto">
+        <h2 style="font-size:1rem;margin-bottom:4px">Admin Login</h2>
+        <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:16px">Masukkan Admin Key untuk mengakses panel</p>
+        <div style="margin-bottom:12px">
+          <input type="password" id="admin-key-input" class="search-input" placeholder="Admin Key"
+                 onkeydown="if(event.key==='Enter')adminLogin()">
+        </div>
+        <div id="admin-login-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-primary" onclick="adminLogin()" style="width:100%">Masuk</button>
+      </div>
+    </div>
+
+    <!-- Admin Panel (hidden until logged in) -->
+    <div id="admin-panel" style="display:none">
+
+      <!-- Stats -->
+      <div class="manager-info" id="admin-stats" style="margin-bottom:20px"></div>
+
+      <!-- User Management -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Kelola Customer</div>
+          <button class="btn btn-secondary" onclick="loadUsers()" style="padding:5px 12px;font-size:0.75rem">&#x1F504; Refresh</button>
+        </div>
+
+        <!-- Search & Filter -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <input type="text" id="user-search" class="search-input" placeholder="Cari email atau nama..." oninput="filterUsers()" style="flex:1;min-width:180px">
+          <div class="pos-filters">
+            <button class="pos-filter active" data-tier="all" onclick="setTierFilter('all')">Semua</button>
+            <button class="pos-filter" data-tier="free" onclick="setTierFilter('free')">Free</button>
+            <button class="pos-filter" data-tier="pro" onclick="setTierFilter('pro')">Pro</button>
+            <button class="pos-filter" data-tier="team" onclick="setTierFilter('team')">Team</button>
+          </div>
+        </div>
+
+        <!-- Users Table -->
+        <div id="users-table" style="overflow-x:auto">
+          <div class="loading"><div class="spinner"></div>Loading...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+const API = '';
+let adminKey = '';
+let allUsers = [];
+let tierFilter = 'all';
+
+// Theme
+function initTheme() {
+  const saved = localStorage.getItem('fpl_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeBtn(saved);
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('fpl_theme', next);
+  updateThemeBtn(next);
+}
+function updateThemeBtn(t) {
+  const b = document.getElementById('theme-btn');
+  if (b) b.innerHTML = t === 'dark' ? '&#9728;' : '&#127769;';
+}
+
+initTheme();
+
+// Check saved admin key
+const savedKey = sessionStorage.getItem('mallempu_admin_key');
+if (savedKey) { adminKey = savedKey; showPanel(); }
+
+function adminLogin() {
+  const key = document.getElementById('admin-key-input').value.trim();
+  const err = document.getElementById('admin-login-error');
+  if (!key) { err.textContent = 'Admin key wajib diisi'; err.style.display = 'block'; return; }
+  adminKey = key;
+  // Test the key
+  fetch(`${API}/api/admin/users`, { headers: { 'X-Admin-Key': key } })
+    .then(r => {
+      if (!r.ok) throw new Error('Invalid key');
+      return r.json();
+    })
+    .then(data => {
+      sessionStorage.setItem('mallempu_admin_key', key);
+      allUsers = data.users;
+      showPanel();
+      renderUsers();
+    })
+    .catch(() => {
+      err.textContent = 'Admin key salah';
+      err.style.display = 'block';
+      adminKey = '';
+    });
+}
+
+function showPanel() {
+  document.getElementById('admin-login-section').style.display = 'none';
+  document.getElementById('admin-panel').style.display = 'block';
+  loadUsers();
+}
+
+async function loadUsers() {
+  try {
+    const res = await fetch(`${API}/api/admin/users`, { headers: { 'X-Admin-Key': adminKey } });
+    if (!res.ok) { sessionStorage.removeItem('mallempu_admin_key'); location.reload(); return; }
+    const data = await res.json();
+    allUsers = data.users;
+    renderStats();
+    renderUsers();
+  } catch {}
+}
+
+function renderStats() {
+  const total = allUsers.length;
+  const pro = allUsers.filter(u => u.tier === 'pro').length;
+  const team = allUsers.filter(u => u.tier === 'team').length;
+  const free = total - pro - team;
+  document.getElementById('admin-stats').innerHTML = `
+    <div class="stat-box"><div class="stat-value">${total}</div><div class="stat-label">Total Users</div></div>
+    <div class="stat-box"><div class="stat-value" style="color:var(--text-muted)">${free}</div><div class="stat-label">Free</div></div>
+    <div class="stat-box"><div class="stat-value" style="color:var(--gold)">${pro}</div><div class="stat-label">Pro</div></div>
+    <div class="stat-box"><div class="stat-value" style="color:var(--purple)">${team}</div><div class="stat-label">Team</div></div>`;
+}
+
+function getFilteredUsers() {
+  const q = (document.getElementById('user-search')?.value || '').toLowerCase();
+  return allUsers.filter(u => {
+    if (tierFilter !== 'all' && u.tier !== tierFilter) return false;
+    if (q && !u.email.toLowerCase().includes(q) && !(u.name || '').toLowerCase().includes(q) && !(u.fpl_id + '').includes(q)) return false;
+    return true;
+  });
+}
+
+function filterUsers() { renderUsers(); }
+
+function setTierFilter(t) {
+  tierFilter = t;
+  document.querySelectorAll('.pos-filter').forEach(b => b.classList.toggle('active', b.dataset.tier === t));
+  renderUsers();
+}
+
+function renderUsers() {
+  const users = getFilteredUsers();
+  const container = document.getElementById('users-table');
+  if (!users.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:30px"><p>Tidak ada user ditemukan</p></div>';
+    return;
+  }
+
+  const tierColors = { free: 'var(--text-muted)', pro: 'var(--gold)', team: 'var(--purple)' };
+  const tierBg = { free: 'rgba(107,112,128,0.12)', pro: 'rgba(251,191,36,0.12)', team: 'rgba(167,139,250,0.12)' };
+
+  let html = `<table class="player-table"><thead><tr>
+    <th>#</th><th>Email</th><th class="hide-mobile">Nama</th><th>FPL ID</th>
+    <th>Tier</th><th class="hide-mobile">Terdaftar</th><th>Aksi</th>
+  </tr></thead><tbody>`;
+
+  for (const [i, u] of users.entries()) {
+    const date = u.created_at ? new Date(u.created_at + 'Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' }) : '-';
+    html += `<tr>
+      <td>${i + 1}</td>
+      <td style="font-size:0.8rem">${esc(u.email)}</td>
+      <td class="hide-mobile">${esc(u.name || '-')}</td>
+      <td>${u.fpl_id || '<span style="color:var(--text-muted)">-</span>'}</td>
+      <td><span class="label-badge" style="background:${tierBg[u.tier]};color:${tierColors[u.tier]}">${u.tier.toUpperCase()}</span></td>
+      <td class="hide-mobile" style="font-size:0.75rem;color:var(--text-muted)">${date}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${u.tier === 'pro'
+            ? `<button class="btn btn-secondary" style="padding:3px 8px;font-size:0.68rem;color:var(--red)" onclick="setTier(${u.id},'free')">Cabut Pro</button>`
+            : `<button class="btn btn-secondary" style="padding:3px 8px;font-size:0.68rem;color:var(--gold)" onclick="setTier(${u.id},'pro')">Set Pro</button>`
+          }
+          ${u.tier !== 'team'
+            ? `<button class="btn btn-secondary" style="padding:3px 8px;font-size:0.68rem;color:var(--purple)" onclick="setTier(${u.id},'team')">Set Team</button>`
+            : `<button class="btn btn-secondary" style="padding:3px 8px;font-size:0.68rem;color:var(--red)" onclick="setTier(${u.id},'free')">Cabut</button>`
+          }
+        </div>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function setTier(userId, tier) {
+  try {
+    const res = await fetch(`${API}/api/admin/set-tier`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ userId, tier }),
+    });
+    if (res.ok) {
+      // Update local data
+      const u = allUsers.find(x => x.id === userId);
+      if (u) u.tier = tier;
+      renderStats();
+      renderUsers();
+    }
+  } catch {}
+}
+
+function esc(text) {
+  if (!text) return '';
+  const el = document.createElement('span');
+  el.textContent = text;
+  return el.innerHTML;
+}
+</script>
+
+</body>
+</html>

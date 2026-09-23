@@ -689,4 +689,257 @@ module.exports = {
   priceChangeNotif, statusChangeNotif, squadCard, transferSuggestions,
   trendingCard, trendingOutCard, netTransferCard,
   analyzeCard, historyCard, bestXICard, posLabel, priceStr, escapeHtml,
+  expertPicksCard, priceWarningCard, lineupCard,
+  chipPlanCard, transferPlanCard, whatIfCard,
 };
+
+// ========== Expert Picks Card ==========
+
+function expertPicksCard(picks) {
+  const lines = [
+    `🏆 <b>Expert Picks — GW${picks.gw}</b>`,
+    ``,
+  ];
+
+  // Captain
+  if (picks.captain) {
+    const c = picks.captain;
+    lines.push(`👑 <b>Captain Pick</b>`);
+    lines.push(`  <b>${escapeHtml(c.web_name)}</b> (${c.teamData?.short_name || '?'}) — QS ${c.scoring.qualityScore} | Form ${c.form} | ${priceStr(c.now_cost)}`);
+    if (picks.captainAlts?.length) {
+      lines.push(`  Alternatif: ${picks.captainAlts.map(a => `${escapeHtml(a.web_name)} (${a.scoring.qualityScore})`).join(', ')}`);
+    }
+    lines.push('');
+  }
+
+  // Transfer-In per position
+  lines.push(`📥 <b>Best Transfer-In</b>`);
+  for (const pos of [1, 2, 3, 4]) {
+    const players = picks.transfersIn[pos];
+    if (!players?.length) continue;
+    lines.push(`  ${posLabel(pos)}`);
+    for (const p of players) {
+      lines.push(`    ${colorIcon(p.scoring.qualityScore)} <b>${escapeHtml(p.web_name)}</b> (${p.teamData?.short_name || '?'}) — ${p.scoring.qualityScore} | ${priceStr(p.now_cost)}`);
+    }
+  }
+  lines.push('');
+
+  // Differentials
+  lines.push(`💎 <b>Differential Picks</b> (<12% EO)`);
+  for (const pos of [1, 2, 3, 4]) {
+    const players = picks.differentials[pos];
+    if (!players?.length) continue;
+    for (const p of players) {
+      lines.push(`  ${posLabel(pos)} <b>${escapeHtml(p.web_name)}</b> (${p.teamData?.short_name || '?'}) — DS ${p.scoring.differentialScore} | EO ${p.selected_by_percent}% | ${priceStr(p.now_cost)}`);
+    }
+  }
+  lines.push('');
+
+  // Budget picks
+  lines.push(`💰 <b>Budget Picks</b>`);
+  for (const pos of [1, 2, 3, 4]) {
+    const players = picks.budgetPicks[pos];
+    if (!players?.length) continue;
+    for (const p of players) {
+      lines.push(`  ${posLabel(pos)} <b>${escapeHtml(p.web_name)}</b> (${p.teamData?.short_name || '?'}) — QS ${p.scoring.qualityScore} | ${priceStr(p.now_cost)}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+// ========== Price Warning Card ==========
+
+function priceWarningCard(risers, fallers) {
+  const lines = [
+    `📈📉 <b>Price Warnings</b>`,
+    ``,
+  ];
+
+  const progressBar = (pct) => {
+    const filled = Math.min(Math.round(pct / 10), 10);
+    return '▓'.repeat(filled) + '░'.repeat(10 - filled);
+  };
+
+  const likelihoodEmoji = { VERY_LIKELY: '🔴', LIKELY: '🟠', POSSIBLE: '🟡', UNLIKELY: '⚪' };
+
+  if (risers.length > 0) {
+    lines.push(`📈 <b>Likely to RISE</b>`);
+    for (const p of risers.slice(0, 10)) {
+      const flag = p.inSquad ? ' 📋' : p.inWatchlist ? ' 👁' : '';
+      lines.push(`  ${likelihoodEmoji[p.likelihood] || '⚪'} <b>${escapeHtml(p.webName)}</b> (${p.teamShort}) ${priceStr(p.nowCost)}${flag}`);
+      lines.push(`    ${progressBar(p.progress)} ${p.progress}% | +${p.netTransfers.toLocaleString()} net`);
+    }
+    lines.push('');
+  }
+
+  if (fallers.length > 0) {
+    lines.push(`📉 <b>Likely to FALL</b>`);
+    for (const p of fallers.slice(0, 10)) {
+      const flag = p.inSquad ? ' 📋' : p.inWatchlist ? ' 👁' : '';
+      lines.push(`  ${likelihoodEmoji[p.likelihood] || '⚪'} <b>${escapeHtml(p.webName)}</b> (${p.teamShort}) ${priceStr(p.nowCost)}${flag}`);
+      lines.push(`    ${progressBar(p.progress)} ${p.progress}% | ${p.netTransfers.toLocaleString()} net`);
+    }
+  }
+
+  if (risers.length === 0 && fallers.length === 0) {
+    lines.push(`Tidak ada perubahan harga signifikan saat ini.`);
+  }
+
+  return lines.join('\n');
+}
+
+// ========== Predicted Lineup Card ==========
+
+function lineupCard(lineup) {
+  if (!lineup) return '❌ Data lineup tidak tersedia.';
+
+  const lines = [
+    `⚽ <b>Predicted Lineup — ${escapeHtml(lineup.teamName)}</b>`,
+    `📐 Formation: <b>${lineup.formation}</b> | Avg Confidence: ${lineup.avgProbability}%`,
+    ``,
+  ];
+
+  // Group XI by position
+  const grouped = { 1: [], 2: [], 3: [], 4: [] };
+  for (const p of lineup.startingXI) {
+    grouped[p.elementType].push(p);
+  }
+
+  for (const pos of [1, 2, 3, 4]) {
+    if (!grouped[pos].length) continue;
+    lines.push(`${posLabel(pos)}`);
+    for (const p of grouped[pos]) {
+      const conf = p.startProbability >= 80 ? '🟢' : p.startProbability >= 50 ? '🟡' : '🔴';
+      const statusIcon = p.status === 'i' ? ' 🏥' : p.status === 'd' ? ' ⚠️' : '';
+      lines.push(`  ${conf} <b>${escapeHtml(p.webName)}</b> — ${p.startProbability}% | QS ${p.qualityScore} | £${p.price}m${statusIcon}`);
+    }
+  }
+
+  if (lineup.bench?.length) {
+    lines.push('');
+    lines.push(`<b>Bench:</b>`);
+    for (const p of lineup.bench.slice(0, 5)) {
+      lines.push(`  ⬜ ${escapeHtml(p.webName)} (${POSITION_NAMES[p.elementType]}) — ${p.startProbability}%`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+// ========== Chip Plan Card ==========
+
+function chipPlanCard(result) {
+  const { chips, gwDifficulty } = result;
+  const lines = [
+    `🎯 <b>Chip Plan — Season Strategy</b>`,
+    ``,
+  ];
+
+  const chipEmoji = {
+    wildcard1: '🃏', wildcard2: '🃏',
+    freeHit: '🎯', benchBoost: '📋', tripleCaptain: '👑',
+  };
+  const chipNames = {
+    wildcard1: 'Wildcard 1 (GW1-19)',
+    wildcard2: 'Wildcard 2 (GW20-38)',
+    freeHit: 'Free Hit',
+    benchBoost: 'Bench Boost',
+    tripleCaptain: 'Triple Captain',
+  };
+  const confEmoji = { HIGH: '🟢', MEDIUM: '🟡', LOW: '🔴' };
+
+  for (const [key, name] of Object.entries(chipNames)) {
+    const chip = chips[key];
+    if (!chip) {
+      lines.push(`${chipEmoji[key]} <b>${name}</b>: ❓ Belum bisa ditentukan`);
+      continue;
+    }
+    lines.push(`${chipEmoji[key]} <b>${name}</b> → <b>GW${chip.gw}</b> ${confEmoji[chip.confidence] || ''}`);
+    lines.push(`  ${chip.reason}`);
+    if (chip.isDGW) lines.push(`  ⚡ Double Gameweek`);
+    if (chip.isBGW) lines.push(`  ⚠️ Blank Gameweek`);
+    lines.push('');
+  }
+
+  // Mini difficulty chart (every 5 GWs)
+  lines.push(`<b>Difficulty Overview:</b>`);
+  const chunks = [];
+  for (let i = 0; i < gwDifficulty.length; i += 5) {
+    const chunk = gwDifficulty.slice(i, i + 5);
+    const avgFdr = chunk.reduce((s, g) => s + g.avgFdr, 0) / chunk.length;
+    const icon = avgFdr < 2.7 ? '🟢' : avgFdr < 3.2 ? '🟡' : '🔴';
+    chunks.push(`GW${chunk[0].gw}-${chunk[chunk.length - 1].gw} ${icon}`);
+  }
+  lines.push(chunks.join(' | '));
+
+  return lines.join('\n');
+}
+
+// ========== Transfer Plan Card ==========
+
+function transferPlanCard(result) {
+  const { plan, swings } = result;
+  const lines = [
+    `📋 <b>Transfer Plan</b>`,
+    ``,
+  ];
+
+  for (const gw of plan) {
+    const icon = gw.action === 'transfer' ? '🔄' : '💾';
+    const fdrIcon = parseFloat(gw.avgSquadFdr) < 2.8 ? '🟢' : parseFloat(gw.avgSquadFdr) < 3.3 ? '🟡' : '🔴';
+
+    lines.push(`<b>GW${gw.gw}</b> ${icon} ${fdrIcon} FDR ${gw.avgSquadFdr} | FT: ${gw.freeTransfers}`);
+
+    if (gw.action === 'transfer' && gw.suggestedOut && gw.suggestedIn) {
+      lines.push(`  ❌ ${escapeHtml(gw.suggestedOut.webName)} (${gw.suggestedOut.team}) QS ${gw.suggestedOut.qualityScore}`);
+      lines.push(`  ✅ ${escapeHtml(gw.suggestedIn.webName)} (${gw.suggestedIn.team}) QS ${gw.suggestedIn.qualityScore} | £${gw.suggestedIn.price}m (+${gw.suggestedIn.improvement})`);
+    } else {
+      lines.push(`  ${gw.reason}`);
+    }
+
+    if (gw.swings?.length) {
+      for (const s of gw.swings) {
+        const dir = s.direction === 'improving' ? '📈' : '📉';
+        lines.push(`  ${dir} ${escapeHtml(s.teamShort)} fixtures ${s.direction} (${s.fdrBefore}→${s.fdrAfter})`);
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+// ========== What-If Card ==========
+
+function whatIfCard(result) {
+  if (!result.valid) {
+    return `❌ <b>Simulasi Gagal</b>\n\n${result.errors.join('\n')}`;
+  }
+
+  const lines = [
+    `🔮 <b>What-If Simulator</b>`,
+    ``,
+  ];
+
+  // Transfers
+  for (const t of result.transfers) {
+    lines.push(`🔄 <b>${escapeHtml(t.out.webName)}</b> (${t.out.teamShort}) → <b>${escapeHtml(t.in.webName)}</b> (${t.in.teamShort})`);
+    const qsDiff = t.qualityDiff > 0 ? `+${t.qualityDiff}` : `${t.qualityDiff}`;
+    const costSave = t.costDiff > 0 ? `+£${(t.costDiff / 10).toFixed(1)}m` : `-£${(Math.abs(t.costDiff) / 10).toFixed(1)}m`;
+    lines.push(`  QS: ${t.out.qualityScore} → ${t.in.qualityScore} (${qsDiff}) | Budget: ${costSave}`);
+    lines.push('');
+  }
+
+  // Impact summary
+  const imp = result.impact;
+  const qIcon = imp.qualityDiff > 0 ? '📈' : imp.qualityDiff < 0 ? '📉' : '➡️';
+  const fIcon = imp.fixtureDiff > 0 ? '📈' : imp.fixtureDiff < 0 ? '📉' : '➡️';
+
+  lines.push(`<b>Impact Summary</b>`);
+  lines.push(`  ${qIcon} Avg Quality: ${result.before.avgQuality} → ${result.after.avgQuality} (${imp.qualityDiff > 0 ? '+' : ''}${imp.qualityDiff})`);
+  lines.push(`  ${fIcon} Fixture Score: ${result.before.avgFixture} → ${result.after.avgFixture} (${imp.fixtureDiff > 0 ? '+' : ''}${imp.fixtureDiff})`);
+  lines.push(`  💰 Bank: £${(result.before.bank / 10).toFixed(1)}m → £${(result.after.bank / 10).toFixed(1)}m`);
+
+  return lines.join('\n');
+}
