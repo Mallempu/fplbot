@@ -99,8 +99,8 @@ function buildPositionStats(players, trendMap) {
     stats[pos] = {
       xgi90Mean,
       xgi90Sorted: [...xgi90Shrunk].sort((a, b) => a - b),
-      formLo: Math.min(...formValues, 0),
-      formHi: Math.max(...formValues, 1),
+      formLo: formValues.length > 0 ? Math.min(...formValues) : 0,
+      formHi: formValues.length > 0 ? Math.max(...formValues) : 1,
       valueSorted: [...valueValues].sort((a, b) => a - b),
       xgcNegSorted: [...xgcNeg].sort((a, b) => a - b),
       trendSorted: trendScores,

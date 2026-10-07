@@ -50,7 +50,7 @@ async function main() {
   try {
     if (WEBHOOK_DOMAIN) {
       // === WEBHOOK MODE (Railway/Render/Production) ===
-      const webhookSecret = crypto.randomBytes(32).toString('hex');
+      const webhookSecret = process.env.WEBHOOK_SECRET || crypto.randomBytes(32).toString('hex');
       const webhookPath = `/webhook/${BOT_TOKEN.split(':')[0]}`;
       const webhookUrl = `https://${WEBHOOK_DOMAIN}${webhookPath}`;
 

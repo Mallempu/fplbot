@@ -173,9 +173,11 @@ function buildTransferPlan(squadPicks, scored, fixtures, teams, fromGW, toGW, ba
 
     // Update state: each GW gains 1 FT, using a transfer costs 1
     if (action === 'transfer') {
-      freeTransfers = Math.min(freeTransfers, 5); // used 1, gained 1 = net zero
+      // Used 1 FT this GW, then gain 1 for next GW = net zero change
+      freeTransfers = Math.min(freeTransfers - 1 + 1, 5);
     } else {
-      freeTransfers = Math.min(freeTransfers + 1, 5); // banked FT
+      // Banked: gain 1 FT for next GW
+      freeTransfers = Math.min(freeTransfers + 1, 5);
     }
   }
 

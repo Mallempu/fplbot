@@ -25,9 +25,15 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
-  const [salt, hash] = stored.split(':');
-  const test = crypto.scryptSync(password, salt, 64).toString('hex');
-  return test === hash;
+  const parts = stored.split(':');
+  if (parts.length !== 2) return false;
+  const [salt, hash] = parts;
+  try {
+    const test = crypto.scryptSync(password, salt, 64).toString('hex');
+    return test === hash;
+  } catch {
+    return false;
+  }
 }
 
 function generateToken(userId) {
@@ -40,12 +46,16 @@ function verifyToken(token) {
   if (!token) return null;
   const [payloadB64, sig] = token.split('.');
   if (!payloadB64 || !sig) return null;
-  const payload = Buffer.from(payloadB64, 'base64url').toString();
-  const expected = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('hex');
-  if (sig !== expected) return null;
-  const data = JSON.parse(payload);
-  if (data.exp < Date.now()) return null;
-  return data;
+  try {
+    const payload = Buffer.from(payloadB64, 'base64url').toString();
+    const expected = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('hex');
+    if (sig !== expected) return null;
+    const data = JSON.parse(payload);
+    if (data.exp < Date.now()) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 function authMiddleware(req, res, next) {
@@ -127,7 +137,9 @@ router.get('/api/squad/:managerId', authMiddleware, async (req, res) => {
           displayGw = nextGw;
           isLive = true;
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Live squad fetch failed:', err.message);
+      }
     }
 
     // 2) Fallback to public picks endpoint
@@ -143,7 +155,9 @@ router.get('/api/squad/:managerId', authMiddleware, async (req, res) => {
         try {
           picks = await fetchManagerPicks(managerId, gw);
           displayGw = gw;
-        } catch {}
+        } catch (err) {
+          console.warn(`Picks fetch GW${gw} failed:`, err.message);
+        }
       }
     }
 
@@ -286,7 +300,7 @@ router.get('/api/best11/:managerId', async (req, res) => {
     for (let gw = currentGw - 1; gw >= Math.max(1, currentGw - 3); gw--) gwsToTry.push(gw);
     for (const gw of gwsToTry) {
       if (picks) break;
-      try { picks = await fetchManagerPicks(managerId, gw); displayGw = gw; } catch {}
+      try { picks = await fetchManagerPicks(managerId, gw); displayGw = gw; } catch (err) { console.warn(`Best11 picks GW${gw} failed:`, err.message); }
     }
 
     if (!picks) return res.status(404).json({ error: 'No squad data' });
@@ -565,7 +579,7 @@ router.get('/api/transfer-plan/:managerId', async (req, res) => {
     for (let gw = currentGw - 1; gw >= Math.max(1, currentGw - 3); gw--) gwsToTry.push(gw);
     for (const gw of gwsToTry) {
       if (picks) break;
-      try { picks = await fetchManagerPicks(managerId, gw); } catch {}
+      try { picks = await fetchManagerPicks(managerId, gw); } catch (err) { console.warn(`Transfer plan picks GW${gw} failed:`, err.message); }
     }
     if (!picks) return res.status(404).json({ error: 'No squad data' });
 
@@ -596,7 +610,7 @@ router.post('/api/whatif', async (req, res) => {
 
     let picks = null;
     const gwsToTry = [nextGw, currentGw];
-    for (const gw of gwsToTry) { if (picks) break; try { picks = await fetchManagerPicks(managerId, gw); } catch {} }
+    for (const gw of gwsToTry) { if (picks) break; try { picks = await fetchManagerPicks(managerId, gw); } catch (err) { console.warn(`Whatif picks GW${gw} failed:`, err.message); } }
     if (!picks) return res.status(404).json({ error: 'No squad data' });
 
     const bank = picks.entry_history?.bank || 0;
@@ -621,7 +635,13 @@ router.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = hashPassword(password);
     const result = createWebUser(email, passwordHash, name, fplId || null);
+    if (!result?.lastInsertRowid) {
+      return res.status(500).json({ error: 'Gagal membuat user' });
+    }
     const user = getWebUserById(result.lastInsertRowid);
+    if (!user) {
+      return res.status(500).json({ error: 'Gagal membuat user' });
+    }
     const token = generateToken(user.id);
 
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, fplId: user.fpl_id, tier: user.tier } });

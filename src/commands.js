@@ -83,6 +83,9 @@ async function getScoredPlayers() {
       cachedScored = { scored, teams: data.teams, currentGw: data.currentGw };
       cacheTs = Date.now();
       return cachedScored;
+    } catch (err) {
+      cachePromise = null;
+      throw err;
     } finally {
       cachePromise = null;
     }

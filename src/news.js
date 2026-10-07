@@ -87,7 +87,8 @@ async function fetchTweets(username, count = 5) {
         url: `https://x.com/${username}/status/${tweet.id_str || tweet.id}`,
       };
     }).filter(Boolean);
-  } catch {
+  } catch (err) {
+    console.warn(`Failed to fetch tweets for @${username}:`, err.message);
     return [];
   }
 }

@@ -22,7 +22,7 @@ function getOwnerId() {
 
 function isOwner(ctx) {
   const ownerId = getOwnerId();
-  return ownerId && String(ctx.from.id) === String(ownerId);
+  return ownerId && ctx.from?.id && String(ctx.from.id) === String(ownerId);
 }
 
 // Key sensitif yang hanya owner bisa ubah

@@ -48,7 +48,7 @@ function analyzeGWDifficulty(fixtures, teams) {
 function calculateFixtureSwingScore(gwAnalysis, gw, windowSize = 4) {
   // Compare difficulty of next [windowSize] GWs vs previous [windowSize] GWs
   const idx = gwAnalysis.findIndex(g => g.gw === gw);
-  if (idx < windowSize || idx + windowSize > gwAnalysis.length) return 0;
+  if (idx === -1 || idx < windowSize || idx + windowSize > gwAnalysis.length) return 0;
 
   const before = gwAnalysis.slice(idx - windowSize, idx);
   const after = gwAnalysis.slice(idx, idx + windowSize);
@@ -178,10 +178,14 @@ function analyzeChipTiming(fixtures, teams, scored, squadPlayerIds) {
   const usedGws = new Set();
   for (const [key, chip] of Object.entries(chips)) {
     if (!chip) continue;
-    while (usedGws.has(chip.gw) && chip.gw <= 38) {
+    while (usedGws.has(chip.gw) && chip.gw < 38) {
       chip.gw++;
     }
-    if (chip.gw > 38) chip.gw = 38; // cap at last GW
+    // If still colliding at GW38, skip this chip rather than duplicate
+    if (usedGws.has(chip.gw)) {
+      chips[key] = null;
+      continue;
+    }
     usedGws.add(chip.gw);
   }
 
