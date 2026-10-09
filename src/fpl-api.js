@@ -319,6 +319,120 @@ function getFplLoginDebug() {
   return fplLoginDebug;
 }
 
+// Per-user direct login (email + password) — same DaVinci flow as fplLogin() but per-user
+async function fplLoginDirect(email, password, userId) {
+  if (!email || !password) {
+    return { success: false, error: 'Email dan password FPL wajib diisi' };
+  }
+
+  try {
+    // Step 1: Start OAuth authorize
+    const authResp = await axios.get(
+      `${PINGONE_AUTH_ROOT}/as/authorize`,
+      {
+        params: {
+          client_id: PINGONE_CLIENT_ID,
+          response_type: 'code',
+          redirect_uri: FPL_REDIRECT_URI,
+          scope: FPL_SCOPES,
+        },
+        validateStatus: () => true,
+        timeout: 15000,
+      }
+    );
+
+    const skProps = extractSkProps(authResp.data);
+    if (!skProps?.accessToken || !skProps?.policyId) {
+      return { success: false, error: 'Gagal menghubungi server FPL. Coba lagi nanti.' };
+    }
+
+    const hdr = { 'Authorization': 'Bearer ' + skProps.accessToken, 'Content-Type': 'application/json' };
+    const base = `${skProps.apiRoot}/${skProps.companyId}`;
+
+    // Step 2: Start DaVinci flow
+    const flowResp = await axios.post(
+      `${base}/davinci/policy/${skProps.policyId}/start`,
+      {},
+      { headers: hdr, validateStatus: () => true, timeout: 15000 }
+    );
+    const interactionId = flowResp.data.interactionId;
+    if (!interactionId) {
+      return { success: false, error: 'Gagal memulai login flow. Coba lagi.' };
+    }
+
+    // Step 3: Bot protection
+    const botResp = await axios.post(
+      `${base}/davinci/connections/${flowResp.data.connectionId}/capabilities/${flowResp.data.capabilityName}`,
+      {
+        id: flowResp.data.id,
+        eventName: 'continue',
+        parameters: { protectsdk: '' },
+      },
+      { headers: { ...hdr, interactionid: interactionId }, validateStatus: () => true, timeout: 15000 }
+    );
+
+    // Step 4: Submit credentials
+    const loginConnId = botResp.data.connectionId || flowResp.data.connectionId;
+    const loginCapName = botResp.data.capabilityName || flowResp.data.capabilityName;
+    const loginId = botResp.data.id || flowResp.data.id;
+
+    const loginResp = await axios.post(
+      `${base}/davinci/connections/${loginConnId}/capabilities/${loginCapName}`,
+      {
+        id: loginId,
+        eventName: 'continue',
+        parameters: { username: email, password: password, buttonValue: 'SIGNON' },
+      },
+      { headers: { ...hdr, interactionid: interactionId }, validateStatus: () => true, timeout: 15000 }
+    );
+
+    // Check for auth code
+    if (loginResp.data.authorizeResponse?.code) {
+      const authCode = loginResp.data.authorizeResponse.code;
+
+      // Step 5: Exchange code for token
+      const tokenResp = await axios.post(
+        `${PINGONE_AUTH_ROOT}/as/token`,
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: authCode,
+          client_id: PINGONE_CLIENT_ID,
+          redirect_uri: FPL_REDIRECT_URI,
+        }).toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          validateStatus: () => true,
+          timeout: 15000,
+        }
+      );
+
+      if (tokenResp.data.access_token) {
+        const session = `Bearer ${tokenResp.data.access_token}`;
+        setUserSession(String(userId), session, tokenResp.data.refresh_token);
+        console.log(`✅ FPL direct login berhasil for user ${userId}`);
+        return { success: true };
+      } else {
+        return { success: false, error: 'Token exchange gagal. Coba lagi.' };
+      }
+    } else if (loginResp.status === 400) {
+      const errMsg = loginResp.data.code || loginResp.data.error_reason || loginResp.data.description || '';
+      if (errMsg.includes('Invalid username') || errMsg.includes('password')) {
+        return { success: false, error: 'Email atau password FPL salah' };
+      } else if (errMsg.includes('locked') || errMsg.includes('blocked')) {
+        return { success: false, error: 'Akun FPL terkunci. Reset password di premierleague.com' };
+      }
+      return { success: false, error: errMsg || 'Login gagal' };
+    } else if (loginResp.data.screen) {
+      return { success: false, error: `Login butuh langkah tambahan: ${loginResp.data.screen.name || 'verifikasi'}` };
+    }
+
+    return { success: false, error: 'Login gagal. Coba lagi nanti.' };
+  } catch (err) {
+    console.error('FPL direct login error:', err.message);
+    return { success: false, error: 'Koneksi ke server FPL gagal. Coba lagi.' };
+  }
+}
+
 function setFplSession(token, userId) {
   const id = String(userId || process.env.OWNER_ID || process.env.CHAT_ID || 'owner');
   if (!token) {
@@ -645,7 +759,7 @@ async function fetchAll() {
 module.exports = {
   fetchAll, fetchBootstrap, fetchFixtures, fetchPlayerHistory,
   fetchManagerInfo, fetchManagerPicks, fetchManagerTransfers, clearCache,
-  fetchMyTeam, fplLogin, getFplLoginError, getFplLoginDebug, setFplSession,
+  fetchMyTeam, fplLogin, fplLoginDirect, getFplLoginError, getFplLoginDebug, setFplSession,
   startDeviceCodeFlow, pollDeviceCodeToken, refreshFplToken,
   startAuthCodeFlow, exchangeAuthCode,
   getUserSession, clearUserSession, restoreSessions,

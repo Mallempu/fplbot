@@ -1332,7 +1332,6 @@ function openFplModal() {
   if (!currentUser) { openAuthModal('login'); return; }
   document.getElementById('fpl-connect-modal').classList.add('active');
   document.getElementById('fpl-connect-error').style.display = 'none';
-  document.getElementById('fpl-exchange-error').style.display = 'none';
 
   if (fplConnected) {
     showFplStep('connected');
@@ -1347,96 +1346,57 @@ function closeFplModal() {
 
 function showFplStep(step) {
   document.getElementById('fpl-step-start').style.display = step === 'start' ? 'block' : 'none';
-  document.getElementById('fpl-step-paste').style.display = step === 'paste' ? 'block' : 'none';
   document.getElementById('fpl-step-connected').style.display = step === 'connected' ? 'block' : 'none';
 }
 
-let fplLoginTab = null;
+function toggleFplPw() {
+  const inp = document.getElementById('fpl-password');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
 
-async function startFplLogin() {
-  const btn = document.getElementById('fpl-start-btn');
+async function doFplLogin() {
+  const email = document.getElementById('fpl-email').value.trim();
+  const password = document.getElementById('fpl-password').value;
   const errEl = document.getElementById('fpl-connect-error');
+  const btn = document.getElementById('fpl-login-btn');
   errEl.style.display = 'none';
-  btn.disabled = true;
-  btn.textContent = 'Loading...';
 
-  try {
-    const res = await apiFetch('/api/fpl/start-login', { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
-
-    const authUrl = data.authUrl;
-    document.getElementById('fpl-auth-link').href = authUrl;
-
-    // Open FPL login in a new tab (more reliable than popup)
-    fplLoginTab = window.open(authUrl, '_blank');
-
-    // Show fallback link if tab was blocked
-    const fallbackLink = document.getElementById('fpl-auth-link');
-    if (!fplLoginTab || fplLoginTab.closed) {
-      fallbackLink.style.display = 'block';
-    } else {
-      fallbackLink.style.display = 'none';
-    }
-
-    showFplStep('paste');
-  } catch {
-    errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '&#128279; Buka Halaman Login FPL';
-  }
-}
-
-async function pasteFromClipboard() {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (text && (text.includes('code=') || text.includes('premierleague.com'))) {
-      document.getElementById('fpl-redirect-url').value = text;
-      exchangeFplCode(); // auto-submit
-    } else {
-      const errEl = document.getElementById('fpl-exchange-error');
-      errEl.textContent = 'Clipboard tidak berisi URL redirect FPL yang valid';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    const errEl = document.getElementById('fpl-exchange-error');
-    errEl.textContent = 'Tidak bisa akses clipboard. Paste manual di field di atas.';
+  if (!email || !password) {
+    errEl.textContent = 'Email dan password FPL wajib diisi';
     errEl.style.display = 'block';
+    return;
   }
-}
-
-async function exchangeFplCode() {
-  const redirectUrl = document.getElementById('fpl-redirect-url').value.trim();
-  const errEl = document.getElementById('fpl-exchange-error');
-  const btn = document.getElementById('fpl-exchange-btn');
-  errEl.style.display = 'none';
-
-  if (!redirectUrl) { errEl.textContent = 'Paste URL redirect dari browser'; errEl.style.display = 'block'; return; }
 
   btn.disabled = true;
-  btn.textContent = 'Memverifikasi...';
+  btn.innerHTML = '&#9203; Menghubungkan ke FPL...';
 
   try {
-    const res = await apiFetch('/api/fpl/exchange-code', {
+    const res = await apiFetch('/api/fpl/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ redirectUrl }),
+      body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    if (!res.ok) {
+      errEl.textContent = data.error;
+      errEl.style.display = 'block';
+      return;
+    }
 
     fplConnected = true;
     showFplStep('connected');
     renderAuthArea();
+    // Clear password from form
+    document.getElementById('fpl-password').value = '';
     // Refresh squad if loaded
     const id = document.getElementById('fpl-id-input').value.trim();
     if (id) loadSquad(id);
   } catch {
-    errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block';
+    errEl.textContent = 'Koneksi gagal. Coba lagi.';
+    errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Verifikasi';
+    btn.innerHTML = '&#128274; Login ke FPL';
   }
 }
 

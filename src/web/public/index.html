@@ -197,97 +197,36 @@
 
   <!-- FPL Connect Modal -->
   <div class="modal-overlay" id="fpl-connect-modal">
-    <div class="modal" style="max-width:460px">
+    <div class="modal" style="max-width:420px">
       <button class="modal-close" onclick="closeFplModal()">&times;</button>
       <div id="fpl-connect-body">
-        <!-- Step 1: Start -->
+        <!-- Login Form -->
         <div id="fpl-step-start">
-          <div style="text-align:center;margin-bottom:16px">
+          <div style="text-align:center;margin-bottom:20px">
             <div style="font-size:2.5rem;margin-bottom:6px">&#9917;</div>
             <h3 style="font-size:1rem;margin-bottom:4px">Connect FPL Account</h3>
-            <p style="color:var(--text-muted);font-size:0.78rem">Lihat squad realtime sebelum deadline</p>
+            <p style="color:var(--text-muted);font-size:0.78rem">Masukkan akun FPL untuk lihat squad realtime</p>
           </div>
+
           <div id="fpl-connect-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
-          <button class="btn btn-primary" onclick="startFplLogin()" style="width:100%;padding:14px;font-size:0.9rem" id="fpl-start-btn">&#128279; Buka Halaman Login FPL</button>
-          <p style="color:var(--text-muted);font-size:0.7rem;text-align:center;margin-top:10px">Tab baru akan terbuka ke halaman login FPL</p>
-        </div>
 
-        <!-- Step 2: Instructions + Paste URL -->
-        <div id="fpl-step-paste" style="display:none">
-          <!-- Progress bar -->
-          <div style="display:flex;align-items:center;gap:0;margin-bottom:20px">
-            <div style="flex:1;text-align:center">
-              <div style="width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700">&#10003;</div>
-              <div style="font-size:0.62rem;color:var(--accent);margin-top:2px">Login</div>
-            </div>
-            <div style="flex:0.5;height:2px;background:var(--accent);margin-bottom:14px"></div>
-            <div style="flex:1;text-align:center">
-              <div style="width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700">2</div>
-              <div style="font-size:0.62rem;color:var(--accent);margin-top:2px">Copy URL</div>
-            </div>
-            <div style="flex:0.5;height:2px;background:var(--border);margin-bottom:14px"></div>
-            <div style="flex:1;text-align:center">
-              <div style="width:30px;height:30px;border-radius:50%;background:var(--bg-hover);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;border:2px solid var(--border)">3</div>
-              <div style="font-size:0.62rem;color:var(--text-muted);margin-top:2px">Selesai</div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:0.78rem;color:var(--text-secondary);display:block;margin-bottom:4px">Email FPL</label>
+            <input type="email" id="fpl-email" class="search-input" placeholder="Email yang terdaftar di FPL" style="font-size:0.85rem">
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="font-size:0.78rem;color:var(--text-secondary);display:block;margin-bottom:4px">Password FPL</label>
+            <div style="position:relative">
+              <input type="password" id="fpl-password" class="search-input" placeholder="Password akun FPL" style="font-size:0.85rem;padding-right:40px"
+                     onkeydown="if(event.key==='Enter')doFplLogin()">
+              <button type="button" onclick="toggleFplPw()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);padding:4px">&#128065;</button>
             </div>
           </div>
 
-          <!-- Alert: tab baru sudah terbuka -->
-          <div style="background:rgba(55,178,77,0.1);border:1px solid rgba(55,178,77,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.78rem;color:var(--accent)">
-            &#9989; Tab login FPL sudah terbuka. Ikuti langkah di bawah:
-          </div>
+          <button class="btn btn-primary" onclick="doFplLogin()" style="width:100%;padding:14px;font-size:0.9rem" id="fpl-login-btn">&#128274; Login ke FPL</button>
 
-          <!-- Fallback jika popup diblokir -->
-          <a id="fpl-auth-link" href="#" target="_blank" style="display:none;text-align:center;margin-bottom:12px;font-size:0.78rem;color:var(--red);text-decoration:underline;font-weight:600">
-            &#9888; Tab tidak terbuka? Klik di sini
-          </a>
-
-          <!-- Instruction card -->
-          <div style="background:var(--bg-hover);border-radius:10px;padding:16px;margin-bottom:16px">
-            <div style="font-size:0.82rem;line-height:2;color:var(--text-secondary)">
-              <div style="margin-bottom:2px">
-                <strong style="color:var(--accent);font-size:0.9rem">1.</strong>
-                Login dengan email &amp; password FPL di tab yang terbuka
-              </div>
-              <div style="margin-bottom:2px">
-                <strong style="color:var(--accent);font-size:0.9rem">2.</strong>
-                Tunggu sampai halaman berpindah ke <strong style="color:var(--text)">premierleague.com</strong>
-              </div>
-              <div style="padding-left:20px;margin-bottom:6px;font-size:0.72rem;color:var(--text-muted)">
-                &#128161; Halaman akan redirect beberapa kali — ini normal. Tunggu sampai berhenti.
-              </div>
-              <div>
-                <strong style="color:var(--accent);font-size:0.9rem">3.</strong>
-                Copy <strong style="color:var(--text)">seluruh URL</strong> dari address bar (Ctrl+L lalu Ctrl+C)
-              </div>
-            </div>
-
-            <!-- Visual: tampilan address bar -->
-            <div style="margin-top:12px;margin-bottom:4px;font-size:0.68rem;color:var(--text-muted)">URL yang harus di-copy terlihat seperti ini:</div>
-            <div style="background:var(--bg-card);border:1.5px solid var(--border-strong);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px">
-              <span style="font-size:0.85rem">&#128274;</span>
-              <span style="font-family:monospace;font-size:0.68rem;color:var(--text-muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">https://www.premierleague.com/<strong style="color:var(--accent)">?code=abc123&amp;state=xyz</strong></span>
-            </div>
-            <div style="margin-top:6px;font-size:0.68rem;color:var(--gold)">&#9888; Pastikan URL mengandung <code style="background:var(--bg-card);padding:1px 4px;border-radius:3px">?code=</code> — jika belum ada, tunggu sebentar</div>
-          </div>
-
-          <!-- Error -->
-          <div id="fpl-exchange-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
-
-          <!-- Main action: paste -->
-          <button class="btn btn-primary" onclick="pasteFromClipboard()" style="width:100%;padding:14px;font-size:0.88rem;margin-bottom:6px" id="fpl-paste-btn">
-            &#128203; Paste URL &amp; Verifikasi
-          </button>
-          <p style="text-align:center;font-size:0.68rem;color:var(--text-muted);margin-bottom:12px">Klik tombol di atas setelah copy URL dari address bar</p>
-
-          <!-- Manual paste (selalu terlihat, tapi lebih kecil) -->
-          <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Atau paste manual di sini:</div>
-            <div style="display:flex;gap:6px">
-              <input type="text" id="fpl-redirect-url" class="search-input" placeholder="Paste URL di sini..." style="font-size:0.76rem;flex:1"
-                     onkeydown="if(event.key==='Enter')exchangeFplCode()">
-              <button class="btn btn-secondary" onclick="exchangeFplCode()" style="font-size:0.76rem;white-space:nowrap;padding:8px 14px" id="fpl-exchange-btn">Kirim</button>
-            </div>
+          <div style="margin-top:14px;padding:12px;background:var(--bg-hover);border-radius:8px;font-size:0.7rem;color:var(--text-muted);line-height:1.6">
+            &#128274; Password kamu <strong>tidak disimpan</strong> — hanya digunakan sekali untuk mendapatkan session token dari server FPL.
           </div>
         </div>
 
