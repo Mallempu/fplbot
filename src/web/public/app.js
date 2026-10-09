@@ -1351,8 +1351,7 @@ function showFplStep(step) {
   document.getElementById('fpl-step-connected').style.display = step === 'connected' ? 'block' : 'none';
 }
 
-let fplPopup = null;
-let fplPopupTimer = null;
+let fplLoginTab = null;
 
 async function startFplLogin() {
   const btn = document.getElementById('fpl-start-btn');
@@ -1369,48 +1368,23 @@ async function startFplLogin() {
     const authUrl = data.authUrl;
     document.getElementById('fpl-auth-link').href = authUrl;
 
-    // Open FPL login in popup window
-    const w = 500, h = 700;
-    const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
-    fplPopup = window.open(authUrl, 'fpl_login', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`);
+    // Open FPL login in a new tab (more reliable than popup)
+    fplLoginTab = window.open(authUrl, '_blank');
 
-    // Show fallback link if popup was blocked
+    // Show fallback link if tab was blocked
     const fallbackLink = document.getElementById('fpl-auth-link');
-    if (!fplPopup || fplPopup.closed) {
+    if (!fplLoginTab || fplLoginTab.closed) {
       fallbackLink.style.display = 'block';
     } else {
       fallbackLink.style.display = 'none';
     }
 
     showFplStep('paste');
-
-    // Poll popup URL — auto-detect redirect with auth code
-    if (fplPopupTimer) clearInterval(fplPopupTimer);
-    fplPopupTimer = setInterval(() => {
-      try {
-        if (!fplPopup || fplPopup.closed) {
-          clearInterval(fplPopupTimer);
-          fplPopupTimer = null;
-          return;
-        }
-        const popupUrl = fplPopup.location.href;
-        if (popupUrl && popupUrl.includes('premierleague.com') && popupUrl.includes('code=')) {
-          clearInterval(fplPopupTimer);
-          fplPopupTimer = null;
-          document.getElementById('fpl-redirect-url').value = popupUrl;
-          fplPopup.close();
-          fplPopup = null;
-          exchangeFplCode(); // auto-submit
-        }
-      } catch {
-        // Cross-origin — can't read URL yet, keep polling
-      }
-    }, 500);
   } catch {
     errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Mulai Login FPL';
+    btn.innerHTML = '&#128279; Buka Halaman Login FPL';
   }
 }
 
