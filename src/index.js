@@ -118,7 +118,8 @@ async function main() {
       }
     }
   } catch (err) {
-    console.error('❌ Failed to start:', err.message);
+    console.error('❌ Failed to start:', err.message || err.code || err);
+    console.error(err.stack || err);
     process.exit(1);
   }
 }

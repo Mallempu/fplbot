@@ -8,25 +8,56 @@ function getPool() {
   const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
 
   if (dbUrl) {
-    pool = mysql.createPool(dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'waitForConnections=true&connectionLimit=10');
+    console.log('[DB] Connecting via MYSQL_URL to', dbUrl.replace(/\/\/.*@/, '//***@'));
+    pool = mysql.createPool(dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'waitForConnections=true&connectionLimit=10&connectTimeout=30000');
   } else {
+    const host = process.env.MYSQLHOST || 'localhost';
+    const port = parseInt(process.env.MYSQLPORT || '3306');
+    const db = process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || 'railway';
+    console.log(`[DB] Connecting via individual vars to ${host}:${port}/${db}`);
     pool = mysql.createPool({
-      host: process.env.MYSQLHOST || 'localhost',
-      port: parseInt(process.env.MYSQLPORT || '3306'),
+      host,
+      port,
       user: process.env.MYSQLUSER || 'root',
       password: process.env.MYSQLPASSWORD || '',
-      database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || 'railway',
+      database: db,
       waitForConnections: true,
       connectionLimit: 10,
+      connectTimeout: 30000,
     });
   }
 
   return pool;
 }
 
-// Initialize all tables
-async function initDb() {
-  const p = getPool();
+// Initialize all tables with retry logic
+async function initDb(retries = 5) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const p = getPool();
+      // Test connection first
+      const conn = await p.getConnection();
+      conn.release();
+      console.log(`[DB] MySQL connected (attempt ${attempt})`);
+      await createTables(p);
+      return;
+    } catch (err) {
+      console.error(`[DB] Connection attempt ${attempt}/${retries} failed:`, err.message || err.code || err);
+      if (attempt < retries) {
+        // Reset pool on failure so it reconnects
+        if (pool) { try { await pool.end(); } catch {} }
+        pool = null;
+        const delay = attempt * 3000; // 3s, 6s, 9s, 12s, 15s
+        console.log(`[DB] Retrying in ${delay / 1000}s...`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        throw new Error(`MySQL connection failed after ${retries} attempts: ${err.message || err.code}`);
+      }
+    }
+  }
+}
+
+async function createTables(p) {
 
   await p.execute(`
     CREATE TABLE IF NOT EXISTS snapshots (
