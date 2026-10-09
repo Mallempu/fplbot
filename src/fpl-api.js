@@ -342,7 +342,12 @@ async function fplLoginDirect(email, password, userId) {
     );
 
     const skProps = extractSkProps(authResp.data);
+    console.log(`[FPL Direct] Step 1: authorize status=${authResp.status}, hasSkProps=${!!skProps}, keys=${skProps ? Object.keys(skProps).join(',') : 'none'}`);
+    if (skProps) {
+      console.log(`[FPL Direct] skProps: apiRoot=${skProps.apiRoot}, companyId=${skProps.companyId}, policyId=${skProps.policyId}, hasToken=${!!skProps.accessToken}`);
+    }
     if (!skProps?.accessToken || !skProps?.policyId) {
+      console.error(`[FPL Direct] skProps missing required fields. authResp content-type: ${authResp.headers?.['content-type']}, body length: ${typeof authResp.data === 'string' ? authResp.data.length : 'not-string'}`);
       return { success: false, error: 'Gagal menghubungi server FPL. Coba lagi nanti.' };
     }
 
@@ -350,13 +355,17 @@ async function fplLoginDirect(email, password, userId) {
     const base = `${skProps.apiRoot}/${skProps.companyId}`;
 
     // Step 2: Start DaVinci flow
+    const flowStartUrl = `${base}/davinci/policy/${skProps.policyId}/start`;
+    console.log(`[FPL Direct] Step 2: POST ${flowStartUrl}`);
     const flowResp = await axios.post(
-      `${base}/davinci/policy/${skProps.policyId}/start`,
+      flowStartUrl,
       {},
       { headers: hdr, validateStatus: () => true, timeout: 15000 }
     );
     const interactionId = flowResp.data.interactionId;
+    console.log(`[FPL Direct] Step 2 response: status=${flowResp.status}, hasInteraction=${!!interactionId}, keys=${Object.keys(flowResp.data || {}).join(',')}`);
     if (!interactionId) {
+      console.error(`[FPL Direct] Flow start failed. Response:`, JSON.stringify(flowResp.data).substring(0, 500));
       return { success: false, error: 'Gagal memulai login flow. Coba lagi.' };
     }
 
