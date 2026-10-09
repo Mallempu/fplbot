@@ -25,9 +25,13 @@
       <div class="card" style="max-width:400px;margin:60px auto">
         <h2 style="font-size:1rem;margin-bottom:4px">Admin Login</h2>
         <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:16px">Masukkan Admin Key untuk mengakses panel</p>
-        <div style="margin-bottom:12px">
+        <div style="margin-bottom:12px;position:relative">
           <input type="password" id="admin-key-input" class="search-input" placeholder="Admin Key"
-                 onkeydown="if(event.key==='Enter')adminLogin()">
+                 onkeydown="if(event.key==='Enter')adminLogin()" style="padding-right:40px">
+          <button type="button" onclick="togglePasswordVisibility()" id="toggle-pw-btn"
+                  style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text-muted);padding:4px">
+            &#128065;
+          </button>
         </div>
         <div id="admin-login-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
         <button class="btn btn-primary" onclick="adminLogin()" style="width:100%">Masuk</button>
@@ -92,6 +96,18 @@ function updateThemeBtn(t) {
 }
 
 initTheme();
+
+function togglePasswordVisibility() {
+  const input = document.getElementById('admin-key-input');
+  const btn = document.getElementById('toggle-pw-btn');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = '&#128064;'; // 👀 eyes = visible
+  } else {
+    input.type = 'password';
+    btn.innerHTML = '&#128065;'; // 👁 eye = hidden
+  }
+}
 
 // Check saved admin key
 const savedKey = sessionStorage.getItem('mallempu_admin_key');
