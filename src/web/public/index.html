@@ -212,23 +212,32 @@
 
         <!-- Step 2: Paste URL -->
         <div id="fpl-step-paste" style="display:none">
-          <h3 style="margin-bottom:4px;font-size:1rem">&#128273; Paste Redirect URL</h3>
-          <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:12px">
-            1. Klik tombol di bawah untuk login ke FPL<br>
-            2. Setelah login, kamu akan diarahkan ke premierleague.com<br>
-            3. <strong>Copy URL lengkap</strong> dari address bar<br>
-            4. Paste URL di bawah ini
-          </p>
-          <a id="fpl-auth-link" href="#" target="_blank" class="btn btn-secondary" style="display:block;text-align:center;margin-bottom:12px;text-decoration:none">
-            &#128279; Buka Halaman Login FPL
+          <h3 style="margin-bottom:4px;font-size:1rem">&#128273; Verifikasi Login FPL</h3>
+
+          <div style="background:var(--bg-hover);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;line-height:1.6">
+            <div style="margin-bottom:6px"><strong>&#9989; Window login FPL sudah terbuka</strong></div>
+            <p style="color:var(--text-muted);margin:0">
+              Jika popup tidak muncul, klik tombol di bawah.<br>
+              Setelah login, URL akan otomatis terdeteksi.<br>
+              Jika tidak otomatis — <strong>copy URL</strong> dari address bar lalu klik "Paste dari Clipboard".
+            </p>
+          </div>
+
+          <a id="fpl-auth-link" href="#" target="_blank" class="btn btn-secondary" style="display:block;text-align:center;margin-bottom:12px;text-decoration:none;font-size:0.78rem">
+            &#128279; Buka Login FPL Manual
           </a>
-          <div style="margin-bottom:12px">
-            <label style="font-size:0.78rem;color:var(--text-secondary)">Redirect URL</label>
-            <input type="text" id="fpl-redirect-url" class="search-input" placeholder="https://www.premierleague.com/?code=..." style="margin-top:4px"
+
+          <button class="btn btn-primary" onclick="pasteFromClipboard()" style="width:100%;margin-bottom:10px">
+            &#128203; Paste dari Clipboard
+          </button>
+
+          <div style="position:relative;margin-bottom:12px">
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-muted);margin-bottom:6px">atau paste manual</div>
+            <input type="text" id="fpl-redirect-url" class="search-input" placeholder="https://www.premierleague.com/?code=..." style="font-size:0.78rem"
                    onkeydown="if(event.key==='Enter')exchangeFplCode()">
           </div>
           <div id="fpl-exchange-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
-          <button class="btn btn-primary" onclick="exchangeFplCode()" style="width:100%" id="fpl-exchange-btn">Verifikasi</button>
+          <button class="btn btn-secondary" onclick="exchangeFplCode()" style="width:100%;font-size:0.78rem" id="fpl-exchange-btn">Verifikasi Manual</button>
         </div>
 
         <!-- Step 3: Connected -->

@@ -1351,6 +1351,9 @@ function showFplStep(step) {
   document.getElementById('fpl-step-connected').style.display = step === 'connected' ? 'block' : 'none';
 }
 
+let fplPopup = null;
+let fplPopupTimer = null;
+
 async function startFplLogin() {
   const btn = document.getElementById('fpl-start-btn');
   const errEl = document.getElementById('fpl-connect-error');
@@ -1364,12 +1367,59 @@ async function startFplLogin() {
     if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
 
     document.getElementById('fpl-auth-link').href = data.authUrl;
+
+    // Open FPL login in popup window
+    const w = 500, h = 700;
+    const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
+    fplPopup = window.open(data.authUrl, 'fpl_login', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`);
+
     showFplStep('paste');
+
+    // Poll popup URL — auto-detect redirect with auth code
+    if (fplPopupTimer) clearInterval(fplPopupTimer);
+    fplPopupTimer = setInterval(() => {
+      try {
+        if (!fplPopup || fplPopup.closed) {
+          clearInterval(fplPopupTimer);
+          fplPopupTimer = null;
+          return;
+        }
+        const popupUrl = fplPopup.location.href;
+        if (popupUrl && popupUrl.includes('premierleague.com') && popupUrl.includes('code=')) {
+          clearInterval(fplPopupTimer);
+          fplPopupTimer = null;
+          document.getElementById('fpl-redirect-url').value = popupUrl;
+          fplPopup.close();
+          fplPopup = null;
+          exchangeFplCode(); // auto-submit
+        }
+      } catch {
+        // Cross-origin — can't read URL yet, keep polling
+      }
+    }, 500);
   } catch {
     errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
     btn.textContent = 'Mulai Login FPL';
+  }
+}
+
+async function pasteFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text && (text.includes('code=') || text.includes('premierleague.com'))) {
+      document.getElementById('fpl-redirect-url').value = text;
+      exchangeFplCode(); // auto-submit
+    } else {
+      const errEl = document.getElementById('fpl-exchange-error');
+      errEl.textContent = 'Clipboard tidak berisi URL redirect FPL yang valid';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    const errEl = document.getElementById('fpl-exchange-error');
+    errEl.textContent = 'Tidak bisa akses clipboard. Paste manual di field di atas.';
+    errEl.style.display = 'block';
   }
 }
 
