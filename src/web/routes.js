@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
-const { fetchManagerInfo, fetchManagerPicks, fetchBootstrap, fetchFixtures, fetchManagerTransfers, fetchMyTeam, getUserSession } = require('../fpl-api');
+const { fetchManagerInfo, fetchManagerPicks, fetchBootstrap, fetchFixtures, fetchManagerTransfers, fetchMyTeam, getUserSession, startAuthCodeFlow, exchangeAuthCode, clearUserSession } = require('../fpl-api');
 const { getScoredPlayers, findPlayer } = require('../commands');
 const { getUser, getUserStats, createWebUser, getWebUserByEmail, getWebUserById, updateWebUserLogin, updateWebUserTier, updateWebUserFplId } = require('../database');
 const { getMetrics } = require('../monitor');
@@ -686,6 +686,52 @@ router.post('/api/auth/update', authMiddleware, (req, res) => {
   if (fplId != null) updateWebUserFplId(req.userId, parseInt(fplId) || null);
   const user = getWebUserById(req.userId);
   res.json({ id: user.id, email: user.email, name: user.name, fplId: user.fpl_id, tier: user.tier });
+});
+
+// ===== FPL LOGIN (Web — PKCE OAuth) =====
+
+// Step 1: Start FPL login — returns auth URL for user to open
+router.post('/api/fpl/start-login', authMiddleware, (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: 'Login ke Mallempu dulu' });
+
+  const webUserId = `web_${req.userId}`;
+  const authUrl = startAuthCodeFlow(webUserId);
+  res.json({ authUrl });
+});
+
+// Step 2: Exchange redirect URL for FPL session token
+router.post('/api/fpl/exchange-code', authMiddleware, async (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: 'Login ke Mallempu dulu' });
+
+  const { redirectUrl } = req.body;
+  if (!redirectUrl) return res.status(400).json({ error: 'Redirect URL wajib diisi' });
+
+  const webUserId = `web_${req.userId}`;
+  const result = await exchangeAuthCode(redirectUrl, webUserId);
+
+  if (result.success) {
+    res.json({ success: true, message: 'FPL login berhasil! Squad realtime aktif.' });
+  } else {
+    res.status(400).json({ error: result.error || 'FPL login gagal' });
+  }
+});
+
+// Check FPL session status
+router.get('/api/fpl/status', authMiddleware, (req, res) => {
+  if (!req.userId) return res.status(401).json({ connected: false });
+
+  const webUserId = `web_${req.userId}`;
+  const session = getUserSession(webUserId);
+  res.json({ connected: !!session });
+});
+
+// Disconnect FPL session
+router.post('/api/fpl/disconnect', authMiddleware, (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: 'Tidak terautentikasi' });
+
+  const webUserId = `web_${req.userId}`;
+  clearUserSession(webUserId);
+  res.json({ success: true, message: 'FPL session disconnected' });
 });
 
 // ===== ADMIN ENDPOINTS =====

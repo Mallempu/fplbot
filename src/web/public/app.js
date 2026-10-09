@@ -658,7 +658,7 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'auth-modal') closeAuthModal();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeModal(); closeWhatIf(); closeAuthModal(); }
+  if (e.key === 'Escape') { closeModal(); closeWhatIf(); closeAuthModal(); closeFplModal(); }
 });
 
 // ===== AUTO REFRESH =====
@@ -1170,6 +1170,7 @@ async function fetchMe(token) {
     });
     if (res.ok) {
       currentUser = await res.json();
+      await checkFplStatus();
       renderAuthArea();
       // Auto-fill FPL ID if user has one saved
       if (currentUser.fplId && !document.getElementById('fpl-id-input').value) {
@@ -1205,6 +1206,9 @@ function renderAuthArea() {
             Tier: <strong style="color:var(--text)">${currentUser.tier.toUpperCase()}</strong>
             ${currentUser.tier === 'free' ? '<div style="margin-top:4px;font-size:0.7rem;color:var(--accent)">Upgrade ke Pro untuk fitur lengkap</div>' : ''}
           </div>
+          <button onclick="openFplModal()" style="width:100%;text-align:left;padding:10px 14px;background:none;border:none;border-top:1px solid var(--border);color:var(--text-secondary);cursor:pointer;font-size:0.78rem;font-family:var(--font)">
+            ${fplConnected ? '&#9989; FPL Connected' : '&#9917; Connect FPL'}
+          </button>
           <button onclick="doLogout()" style="width:100%;text-align:left;padding:10px 14px;background:none;border:none;border-top:1px solid var(--border);color:var(--red);cursor:pointer;font-size:0.78rem;font-family:var(--font)">Logout</button>
         </div>
       </div>`;
@@ -1309,6 +1313,113 @@ function doLogout() {
   currentUser = null;
   renderAuthArea();
 }
+
+// ===== FPL CONNECT =====
+let fplConnected = false;
+
+async function checkFplStatus() {
+  if (!currentUser) { fplConnected = false; return; }
+  try {
+    const res = await apiFetch('/api/fpl/status');
+    const data = await res.json();
+    fplConnected = data.connected;
+  } catch {
+    fplConnected = false;
+  }
+}
+
+function openFplModal() {
+  if (!currentUser) { openAuthModal('login'); return; }
+  document.getElementById('fpl-connect-modal').classList.add('active');
+  document.getElementById('fpl-connect-error').style.display = 'none';
+  document.getElementById('fpl-exchange-error').style.display = 'none';
+
+  if (fplConnected) {
+    showFplStep('connected');
+  } else {
+    showFplStep('start');
+  }
+}
+
+function closeFplModal() {
+  document.getElementById('fpl-connect-modal').classList.remove('active');
+}
+
+function showFplStep(step) {
+  document.getElementById('fpl-step-start').style.display = step === 'start' ? 'block' : 'none';
+  document.getElementById('fpl-step-paste').style.display = step === 'paste' ? 'block' : 'none';
+  document.getElementById('fpl-step-connected').style.display = step === 'connected' ? 'block' : 'none';
+}
+
+async function startFplLogin() {
+  const btn = document.getElementById('fpl-start-btn');
+  const errEl = document.getElementById('fpl-connect-error');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+
+  try {
+    const res = await apiFetch('/api/fpl/start-login', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+
+    document.getElementById('fpl-auth-link').href = data.authUrl;
+    showFplStep('paste');
+  } catch {
+    errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Mulai Login FPL';
+  }
+}
+
+async function exchangeFplCode() {
+  const redirectUrl = document.getElementById('fpl-redirect-url').value.trim();
+  const errEl = document.getElementById('fpl-exchange-error');
+  const btn = document.getElementById('fpl-exchange-btn');
+  errEl.style.display = 'none';
+
+  if (!redirectUrl) { errEl.textContent = 'Paste URL redirect dari browser'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Memverifikasi...';
+
+  try {
+    const res = await apiFetch('/api/fpl/exchange-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ redirectUrl }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+
+    fplConnected = true;
+    showFplStep('connected');
+    renderAuthArea();
+    // Refresh squad if loaded
+    const id = document.getElementById('fpl-id-input').value.trim();
+    if (id) loadSquad(id);
+  } catch {
+    errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Verifikasi';
+  }
+}
+
+async function disconnectFpl() {
+  try {
+    await apiFetch('/api/fpl/disconnect', { method: 'POST' });
+    fplConnected = false;
+    showFplStep('start');
+    renderAuthArea();
+  } catch {}
+}
+
+// Close FPL modal on overlay click
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'fpl-connect-modal') closeFplModal();
+});
 
 // ===== MANUAL REFRESH =====
 async function manualRefresh() {

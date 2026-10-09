@@ -195,6 +195,55 @@
     </div>
   </div>
 
+  <!-- FPL Connect Modal -->
+  <div class="modal-overlay" id="fpl-connect-modal">
+    <div class="modal" style="max-width:480px">
+      <button class="modal-close" onclick="closeFplModal()">&times;</button>
+      <div id="fpl-connect-body">
+        <!-- Step 1: Start -->
+        <div id="fpl-step-start">
+          <h3 style="margin-bottom:4px;font-size:1rem">&#9917; Connect FPL Account</h3>
+          <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:16px">
+            Hubungkan akun FPL untuk melihat squad realtime sebelum deadline
+          </p>
+          <div id="fpl-connect-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
+          <button class="btn btn-primary" onclick="startFplLogin()" style="width:100%" id="fpl-start-btn">Mulai Login FPL</button>
+        </div>
+
+        <!-- Step 2: Paste URL -->
+        <div id="fpl-step-paste" style="display:none">
+          <h3 style="margin-bottom:4px;font-size:1rem">&#128273; Paste Redirect URL</h3>
+          <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:12px">
+            1. Klik tombol di bawah untuk login ke FPL<br>
+            2. Setelah login, kamu akan diarahkan ke premierleague.com<br>
+            3. <strong>Copy URL lengkap</strong> dari address bar<br>
+            4. Paste URL di bawah ini
+          </p>
+          <a id="fpl-auth-link" href="#" target="_blank" class="btn btn-secondary" style="display:block;text-align:center;margin-bottom:12px;text-decoration:none">
+            &#128279; Buka Halaman Login FPL
+          </a>
+          <div style="margin-bottom:12px">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Redirect URL</label>
+            <input type="text" id="fpl-redirect-url" class="search-input" placeholder="https://www.premierleague.com/?code=..." style="margin-top:4px"
+                   onkeydown="if(event.key==='Enter')exchangeFplCode()">
+          </div>
+          <div id="fpl-exchange-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
+          <button class="btn btn-primary" onclick="exchangeFplCode()" style="width:100%" id="fpl-exchange-btn">Verifikasi</button>
+        </div>
+
+        <!-- Step 3: Connected -->
+        <div id="fpl-step-connected" style="display:none">
+          <div style="text-align:center;padding:20px 0">
+            <div style="font-size:3rem;margin-bottom:8px">&#9989;</div>
+            <h3 style="font-size:1rem;margin-bottom:4px">FPL Connected!</h3>
+            <p style="color:var(--text-muted);font-size:0.82rem">Squad realtime sekarang aktif. Data akan otomatis ter-update.</p>
+            <button class="btn btn-secondary" onclick="disconnectFpl()" style="margin-top:16px;color:var(--red)">Disconnect FPL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Auth Modal -->
   <div class="modal-overlay" id="auth-modal">
     <div class="modal" style="max-width:400px">
