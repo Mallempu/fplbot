@@ -66,8 +66,15 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// --- Static frontend ---
-router.use(express.static(path.join(__dirname, 'public')));
+// --- Static frontend (no-cache to prevent stale files after deploy) ---
+router.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+  }
+}));
 
 // --- API Endpoints ---
 
