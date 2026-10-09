@@ -187,7 +187,7 @@ async function fplLogin() {
       return null;
     }
 
-    const hdr = { 'Authorization': 'Bearer ' + skProps.accessToken, 'Content-Type': 'application/json' };
+    const hdr = { 'X-SK-API-KEY': skProps.accessToken, 'Content-Type': 'application/json' };
     const base = `${skProps.apiRoot}/${skProps.companyId}`;
 
     // Step 2: Start DaVinci flow
@@ -351,7 +351,7 @@ async function fplLoginDirect(email, password, userId) {
       return { success: false, error: 'Gagal menghubungi server FPL. Coba lagi nanti.' };
     }
 
-    const hdr = { 'Authorization': 'Bearer ' + skProps.accessToken, 'Content-Type': 'application/json' };
+    const hdr = { 'X-SK-API-KEY': skProps.accessToken, 'Content-Type': 'application/json' };
     const base = `${skProps.apiRoot}/${skProps.companyId}`;
 
     // Step 2: Start DaVinci flow
