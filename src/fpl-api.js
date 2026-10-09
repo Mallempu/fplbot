@@ -137,6 +137,7 @@ const PINGONE_ENV_ID = '68340de1-dfb9-412e-937c-20172986d129';
 const PINGONE_CLIENT_ID = '1f243d70-a140-4035-8c41-341f5af5aa12';
 const PINGONE_AUTH_ROOT = 'https://account.premierleague.com';
 const PINGONE_AUTH_ROOT_LEGACY = 'https://auth.pingone.eu';
+const PINGONE_DAVINCI_API = 'https://orchestrate-api.pingone.eu';
 const FPL_REDIRECT_URI = 'https://www.premierleague.com/';
 const FPL_SCOPES = 'openid profile offline_access p1:update:user p1:read:device p1:reset:userPassword';
 
@@ -188,7 +189,7 @@ async function fplLogin() {
     }
 
     const hdr = { 'X-SK-API-KEY': skProps.accessToken, 'Content-Type': 'application/json' };
-    const base = `${skProps.apiRoot}/${skProps.companyId}`;
+    const base = `${PINGONE_DAVINCI_API}/${skProps.companyId}`;
 
     // Step 2: Start DaVinci flow
     const flowResp = await axios.post(
@@ -352,7 +353,7 @@ async function fplLoginDirect(email, password, userId) {
     }
 
     const hdr = { 'X-SK-API-KEY': skProps.accessToken, 'Content-Type': 'application/json' };
-    const base = `${skProps.apiRoot}/${skProps.companyId}`;
+    const base = `${PINGONE_DAVINCI_API}/${skProps.companyId}`;
 
     // Step 2: Start DaVinci flow
     const flowStartUrl = `${base}/davinci/policy/${skProps.policyId}/start`;
