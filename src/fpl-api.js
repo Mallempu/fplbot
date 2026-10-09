@@ -135,7 +135,10 @@ function restoreSessions(tokens) {
 
 const PINGONE_ENV_ID = '68340de1-dfb9-412e-937c-20172986d129';
 const PINGONE_CLIENT_ID = '1f243d70-a140-4035-8c41-341f5af5aa12';
-const PINGONE_AUTH_ROOT = 'https://auth.pingone.eu';
+const PINGONE_AUTH_ROOT = 'https://account.premierleague.com';
+const PINGONE_AUTH_ROOT_LEGACY = 'https://auth.pingone.eu';
+const FPL_REDIRECT_URI = 'https://www.premierleague.com/';
+const FPL_SCOPES = 'openid profile offline_access p1:update:user p1:read:device p1:reset:userPassword';
 
 function extractSkProps(html) {
   const start = html.indexOf('var skProps = ') + 14;
@@ -163,13 +166,13 @@ async function fplLogin() {
   try {
     // Step 1: Start OAuth authorize — get DaVinci flow config
     const authResp = await axios.get(
-      `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/authorize`,
+      `${PINGONE_AUTH_ROOT}/as/authorize`,
       {
         params: {
           client_id: PINGONE_CLIENT_ID,
           response_type: 'code',
-          redirect_uri: 'https://www.premierleague.com/',
-          scope: 'openid',
+          redirect_uri: FPL_REDIRECT_URI,
+          scope: FPL_SCOPES,
         },
         validateStatus: () => true,
         timeout: 15000,
@@ -256,12 +259,12 @@ async function fplLogin() {
 
       // Step 5: Exchange auth code for session token via PingOne token endpoint
       const tokenResp = await axios.post(
-        `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/token`,
+        `${PINGONE_AUTH_ROOT}/as/token`,
         new URLSearchParams({
           grant_type: 'authorization_code',
           code: authCode,
           client_id: PINGONE_CLIENT_ID,
-          redirect_uri: 'https://www.premierleague.com/',
+          redirect_uri: FPL_REDIRECT_URI,
         }).toString(),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -354,14 +357,15 @@ function startAuthCodeFlow(userId) {
   const params = new URLSearchParams({
     client_id: PINGONE_CLIENT_ID,
     response_type: 'code',
-    redirect_uri: 'https://www.premierleague.com/',
-    scope: 'openid',
+    redirect_uri: FPL_REDIRECT_URI,
+    scope: FPL_SCOPES,
     code_challenge: pkce.codeChallenge,
     code_challenge_method: 'S256',
     state: pkce.state,
+    language: 'en',
   });
 
-  return `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/authorize?${params.toString()}`;
+  return `${PINGONE_AUTH_ROOT}/as/authorize?${params.toString()}`;
 }
 
 async function exchangeAuthCode(redirectUrl, userId) {
@@ -394,12 +398,12 @@ async function exchangeAuthCode(redirectUrl, userId) {
 
   try {
     const { data } = await axios.post(
-      `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/token`,
+      `${PINGONE_AUTH_ROOT}/as/token`,
       new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
         client_id: PINGONE_CLIENT_ID,
-        redirect_uri: 'https://www.premierleague.com/',
+        redirect_uri: FPL_REDIRECT_URI,
         code_verifier: pendingPkce.codeVerifier,
       }).toString(),
       {
@@ -433,10 +437,10 @@ async function exchangeAuthCode(redirectUrl, userId) {
 async function startDeviceCodeFlow() {
   try {
     const { data } = await axios.post(
-      `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/device_authorization`,
+      `${PINGONE_AUTH_ROOT}/as/device_authorization`,
       new URLSearchParams({
         client_id: PINGONE_CLIENT_ID,
-        scope: 'openid',
+        scope: FPL_SCOPES,
       }).toString(),
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -459,7 +463,7 @@ async function pollDeviceCodeToken(deviceCode, userId, interval = 5, expiresIn =
 
     try {
       const { data } = await axios.post(
-        `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/token`,
+        `${PINGONE_AUTH_ROOT}/as/token`,
         new URLSearchParams({
           grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
           device_code: deviceCode,
@@ -505,7 +509,7 @@ async function refreshFplToken(userId) {
   if (!session?.refreshToken) return false;
   try {
     const { data } = await axios.post(
-      `${PINGONE_AUTH_ROOT}/${PINGONE_ENV_ID}/as/token`,
+      `${PINGONE_AUTH_ROOT}/as/token`,
       new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: session.refreshToken,
