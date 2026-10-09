@@ -137,7 +137,6 @@ const PINGONE_ENV_ID = '68340de1-dfb9-412e-937c-20172986d129';
 const PINGONE_CLIENT_ID = '1f243d70-a140-4035-8c41-341f5af5aa12';
 const PINGONE_AUTH_ROOT = 'https://account.premierleague.com';
 const PINGONE_AUTH_ROOT_LEGACY = 'https://auth.pingone.eu';
-const PINGONE_DAVINCI_API = 'https://orchestrate-api.pingone.eu';
 const FPL_REDIRECT_URI = 'https://www.premierleague.com/';
 const FPL_SCOPES = 'openid profile offline_access p1:update:user p1:read:device p1:reset:userPassword';
 
@@ -188,8 +187,8 @@ async function fplLogin() {
       return null;
     }
 
-    const hdr = { 'X-SK-API-KEY': skProps.accessToken, 'Content-Type': 'application/json' };
-    const base = `${PINGONE_DAVINCI_API}/${skProps.companyId}`;
+    const hdr = { Authorization: `Bearer ${skProps.accessToken}`, 'Content-Type': 'application/json' };
+    const base = skProps.apiRoot || PINGONE_AUTH_ROOT;
 
     // Step 2: Start DaVinci flow
     const flowResp = await axios.post(
@@ -198,6 +197,7 @@ async function fplLogin() {
       { headers: hdr, validateStatus: () => true, timeout: 15000 }
     );
     const interactionId = flowResp.data.interactionId;
+    const ihdr = { ...hdr, interactionId, ...(flowResp.data.interactionToken && { interactionToken: flowResp.data.interactionToken }) };
     fplLoginDebug.steps.push({ step: 2, name: 'flow-start', status: flowResp.status, hasInteraction: !!interactionId });
     if (!interactionId) {
       fplLoginError = 'Gagal memulai DaVinci login flow';
@@ -213,7 +213,7 @@ async function fplLogin() {
         eventName: 'continue',
         parameters: { protectsdk: '' },
       },
-      { headers: { ...hdr, interactionid: interactionId }, validateStatus: () => true, timeout: 15000 }
+      { headers: ihdr, validateStatus: () => true, timeout: 15000 }
     );
 
     console.log(`DaVinci step3 response: status=${botResp.status}, screen=${botResp.data.screen?.name}, connId=${botResp.data.connectionId}`);
@@ -240,7 +240,7 @@ async function fplLogin() {
           buttonValue: 'SIGNON',
         },
       },
-      { headers: { ...hdr, interactionid: interactionId }, validateStatus: () => true, timeout: 15000 }
+      { headers: ihdr, validateStatus: () => true, timeout: 15000 }
     );
 
     console.log(`FPL PingOne login: status=${loginResp.status}, respKeys=${Object.keys(loginResp.data || {}).join(',')}`);
@@ -352,8 +352,8 @@ async function fplLoginDirect(email, password, userId) {
       return { success: false, error: 'Gagal menghubungi server FPL. Coba lagi nanti.' };
     }
 
-    const hdr = { 'X-SK-API-KEY': skProps.accessToken, 'Content-Type': 'application/json' };
-    const base = `${PINGONE_DAVINCI_API}/${skProps.companyId}`;
+    const hdr = { Authorization: `Bearer ${skProps.accessToken}`, 'Content-Type': 'application/json' };
+    const base = skProps.apiRoot || PINGONE_AUTH_ROOT;
 
     // Step 2: Start DaVinci flow
     const flowStartUrl = `${base}/davinci/policy/${skProps.policyId}/start`;
@@ -364,6 +364,7 @@ async function fplLoginDirect(email, password, userId) {
       { headers: hdr, validateStatus: () => true, timeout: 15000 }
     );
     const interactionId = flowResp.data.interactionId;
+    const ihdr = { ...hdr, interactionId, ...(flowResp.data.interactionToken && { interactionToken: flowResp.data.interactionToken }) };
     console.log(`[FPL Direct] Step 2 response: status=${flowResp.status}, hasInteraction=${!!interactionId}, keys=${Object.keys(flowResp.data || {}).join(',')}`);
     if (!interactionId) {
       console.error(`[FPL Direct] Flow start failed. Response:`, JSON.stringify(flowResp.data).substring(0, 500));
@@ -378,8 +379,10 @@ async function fplLoginDirect(email, password, userId) {
         eventName: 'continue',
         parameters: { protectsdk: '' },
       },
-      { headers: { ...hdr, interactionid: interactionId }, validateStatus: () => true, timeout: 15000 }
+      { headers: ihdr, validateStatus: () => true, timeout: 15000 }
     );
+
+    console.log(`[FPL Direct] Step 3 response: status=${botResp.status}, screen=${botResp.data?.screen?.name}, cap=${botResp.data?.capabilityName}`);
 
     // Step 4: Submit credentials
     const loginConnId = botResp.data.connectionId || flowResp.data.connectionId;
@@ -393,8 +396,10 @@ async function fplLoginDirect(email, password, userId) {
         eventName: 'continue',
         parameters: { username: email, password: password, buttonValue: 'SIGNON' },
       },
-      { headers: { ...hdr, interactionid: interactionId }, validateStatus: () => true, timeout: 15000 }
+      { headers: ihdr, validateStatus: () => true, timeout: 15000 }
     );
+
+    console.log(`[FPL Direct] Step 4 response: status=${loginResp.status}, hasCode=${!!loginResp.data?.authorizeResponse?.code}, screen=${loginResp.data?.screen?.name}, code=${loginResp.data?.code || ""}`);
 
     // Check for auth code
     if (loginResp.data.authorizeResponse?.code) {
