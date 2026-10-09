@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: fpl-differential-bot
+    name: mallempu-fplbot
     runtime: docker
     plan: free
     envVars:
@@ -8,4 +8,14 @@ services:
         sync: false
       - key: CHAT_ID
         sync: false
-    healthCheckPath: /health
+      - key: OWNER_ID
+        sync: false
+      - key: FPL_ID
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+    healthCheckPath: /api/health
