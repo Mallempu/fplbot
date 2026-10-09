@@ -1366,12 +1366,21 @@ async function startFplLogin() {
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
 
-    document.getElementById('fpl-auth-link').href = data.authUrl;
+    const authUrl = data.authUrl;
+    document.getElementById('fpl-auth-link').href = authUrl;
 
     // Open FPL login in popup window
     const w = 500, h = 700;
     const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
-    fplPopup = window.open(data.authUrl, 'fpl_login', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`);
+    fplPopup = window.open(authUrl, 'fpl_login', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`);
+
+    // Show fallback link if popup was blocked
+    const fallbackLink = document.getElementById('fpl-auth-link');
+    if (!fplPopup || fplPopup.closed) {
+      fallbackLink.style.display = 'block';
+    } else {
+      fallbackLink.style.display = 'none';
+    }
 
     showFplStep('paste');
 

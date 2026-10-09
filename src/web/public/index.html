@@ -197,56 +197,82 @@
 
   <!-- FPL Connect Modal -->
   <div class="modal-overlay" id="fpl-connect-modal">
-    <div class="modal" style="max-width:480px">
+    <div class="modal" style="max-width:440px">
       <button class="modal-close" onclick="closeFplModal()">&times;</button>
       <div id="fpl-connect-body">
         <!-- Step 1: Start -->
         <div id="fpl-step-start">
-          <h3 style="margin-bottom:4px;font-size:1rem">&#9917; Connect FPL Account</h3>
-          <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:16px">
-            Hubungkan akun FPL untuk melihat squad realtime sebelum deadline
-          </p>
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:2.5rem;margin-bottom:6px">&#9917;</div>
+            <h3 style="font-size:1rem;margin-bottom:4px">Connect FPL Account</h3>
+            <p style="color:var(--text-muted);font-size:0.78rem">Lihat squad realtime sebelum deadline</p>
+          </div>
           <div id="fpl-connect-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
-          <button class="btn btn-primary" onclick="startFplLogin()" style="width:100%" id="fpl-start-btn">Mulai Login FPL</button>
+          <button class="btn btn-primary" onclick="startFplLogin()" style="width:100%;padding:12px" id="fpl-start-btn">Login ke FPL</button>
         </div>
 
-        <!-- Step 2: Paste URL -->
+        <!-- Step 2: Waiting / Paste URL -->
         <div id="fpl-step-paste" style="display:none">
-          <h3 style="margin-bottom:4px;font-size:1rem">&#128273; Verifikasi Login FPL</h3>
-
-          <div style="background:var(--bg-hover);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;line-height:1.6">
-            <div style="margin-bottom:6px"><strong>&#9989; Window login FPL sudah terbuka</strong></div>
-            <p style="color:var(--text-muted);margin:0">
-              Jika popup tidak muncul, klik tombol di bawah.<br>
-              Setelah login, URL akan otomatis terdeteksi.<br>
-              Jika tidak otomatis — <strong>copy URL</strong> dari address bar lalu klik "Paste dari Clipboard".
-            </p>
+          <!-- Progress steps -->
+          <div style="display:flex;gap:8px;margin-bottom:20px">
+            <div id="fpl-prog-1" style="flex:1;text-align:center">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700">1</div>
+              <div style="font-size:0.65rem;color:var(--accent);margin-top:3px">Login FPL</div>
+            </div>
+            <div id="fpl-prog-2" style="flex:1;text-align:center">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-hover);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;border:2px solid var(--border)">2</div>
+              <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">Copy URL</div>
+            </div>
+            <div id="fpl-prog-3" style="flex:1;text-align:center">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-hover);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;border:2px solid var(--border)">3</div>
+              <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">Selesai</div>
+            </div>
           </div>
 
-          <a id="fpl-auth-link" href="#" target="_blank" class="btn btn-secondary" style="display:block;text-align:center;margin-bottom:12px;text-decoration:none;font-size:0.78rem">
-            &#128279; Buka Login FPL Manual
+          <!-- Instruction card -->
+          <div style="background:var(--bg-hover);border-radius:10px;padding:16px;margin-bottom:16px">
+            <div style="font-size:0.85rem;font-weight:600;margin-bottom:10px">&#128072; Ikuti langkah ini:</div>
+            <div style="font-size:0.78rem;line-height:1.8;color:var(--text-secondary)">
+              <div style="margin-bottom:4px"><strong style="color:var(--accent)">1.</strong> Login di halaman FPL yang sudah terbuka</div>
+              <div style="margin-bottom:4px"><strong style="color:var(--accent)">2.</strong> Setelah login, halaman akan pindah ke <code style="background:var(--bg-card);padding:1px 6px;border-radius:4px;font-size:0.72rem">premierleague.com</code></div>
+              <div><strong style="color:var(--accent)">3.</strong> <strong>Copy seluruh URL</strong> di address bar browser</div>
+            </div>
+            <!-- Visual hint -->
+            <div style="margin-top:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:monospace;font-size:0.68rem;color:var(--text-muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
+              &#128269; https://www.premierleague.com/?code=abc123&state=xyz...
+            </div>
+          </div>
+
+          <!-- Popup blocked fallback -->
+          <a id="fpl-auth-link" href="#" target="_blank" onclick="return true" style="display:none;text-align:center;margin-bottom:12px;font-size:0.75rem;color:var(--accent);text-decoration:underline">
+            Popup diblokir? Klik di sini untuk buka halaman login FPL
           </a>
 
-          <button class="btn btn-primary" onclick="pasteFromClipboard()" style="width:100%;margin-bottom:10px">
-            &#128203; Paste dari Clipboard
+          <!-- Main action: paste -->
+          <div id="fpl-exchange-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
+
+          <button class="btn btn-primary" onclick="pasteFromClipboard()" style="width:100%;padding:12px;margin-bottom:8px" id="fpl-paste-btn">
+            &#128203; Saya Sudah Copy — Paste URL
           </button>
 
-          <div style="position:relative;margin-bottom:12px">
-            <div style="text-align:center;font-size:0.7rem;color:var(--text-muted);margin-bottom:6px">atau paste manual</div>
-            <input type="text" id="fpl-redirect-url" class="search-input" placeholder="https://www.premierleague.com/?code=..." style="font-size:0.78rem"
-                   onkeydown="if(event.key==='Enter')exchangeFplCode()">
+          <div id="fpl-manual-toggle" style="text-align:center;margin-top:6px">
+            <a href="#" onclick="document.getElementById('fpl-manual-area').style.display='block';this.style.display='none';return false" style="font-size:0.72rem;color:var(--text-muted)">Paste manual &#9662;</a>
           </div>
-          <div id="fpl-exchange-error" style="color:var(--red);font-size:0.78rem;margin-bottom:8px;display:none"></div>
-          <button class="btn btn-secondary" onclick="exchangeFplCode()" style="width:100%;font-size:0.78rem" id="fpl-exchange-btn">Verifikasi Manual</button>
+
+          <div id="fpl-manual-area" style="display:none;margin-top:10px">
+            <input type="text" id="fpl-redirect-url" class="search-input" placeholder="Paste URL di sini..." style="font-size:0.78rem;margin-bottom:8px"
+                   onkeydown="if(event.key==='Enter')exchangeFplCode()">
+            <button class="btn btn-secondary" onclick="exchangeFplCode()" style="width:100%;font-size:0.78rem" id="fpl-exchange-btn">Verifikasi</button>
+          </div>
         </div>
 
         <!-- Step 3: Connected -->
         <div id="fpl-step-connected" style="display:none">
-          <div style="text-align:center;padding:20px 0">
+          <div style="text-align:center;padding:24px 0">
             <div style="font-size:3rem;margin-bottom:8px">&#9989;</div>
-            <h3 style="font-size:1rem;margin-bottom:4px">FPL Connected!</h3>
-            <p style="color:var(--text-muted);font-size:0.82rem">Squad realtime sekarang aktif. Data akan otomatis ter-update.</p>
-            <button class="btn btn-secondary" onclick="disconnectFpl()" style="margin-top:16px;color:var(--red)">Disconnect FPL</button>
+            <h3 style="font-size:1.1rem;margin-bottom:6px">FPL Connected!</h3>
+            <p style="color:var(--text-muted);font-size:0.82rem;line-height:1.5">Squad realtime sekarang aktif.<br>Data otomatis ter-update setiap 2 menit.</p>
+            <button class="btn btn-secondary" onclick="disconnectFpl()" style="margin-top:20px;color:var(--red);font-size:0.78rem">Disconnect FPL</button>
           </div>
         </div>
       </div>
