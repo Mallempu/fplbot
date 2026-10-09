@@ -49,10 +49,10 @@ function startScheduler(bot, adminChatId) {
       const today = new Date().toISOString().slice(0, 10);
 
       // Simpan snapshot hari ini
-      saveSnapshot(data.players, today);
+      await saveSnapshot(data.players, today);
 
       // Bandingkan dengan snapshot sebelumnya
-      const prev = getPreviousSnapshot(today);
+      const prev = await getPreviousSnapshot(today);
       if (prev.length === 0) {
         console.log('[Cron] No previous snapshot for comparison.');
         return;
@@ -62,7 +62,7 @@ function startScheduler(bot, adminChatId) {
       for (const s of prev) prevMap[s.player_id] = s;
 
       // Track all watched player IDs across all users
-      const allWatchedIds = new Set(getAllWatchedPlayerIds());
+      const allWatchedIds = new Set(await getAllWatchedPlayerIds());
 
       const priceChanges = [];
       const statusChanges = [];
@@ -126,14 +126,14 @@ function startScheduler(bot, adminChatId) {
       // === Broadcast popular price/status changes to subscribers ===
       const priceMsg = fmt.priceChangeNotif(priceChanges);
       if (priceMsg) {
-        const priceUsers = getUsersWithNotification('notify_prices');
+        const priceUsers = await getUsersWithNotification('notify_prices');
         console.log(`[Cron] Broadcasting price changes to ${priceUsers.length} users`);
         await broadcast(bot, priceUsers, priceMsg);
       }
 
       const statusMsg = fmt.statusChangeNotif(statusChanges);
       if (statusMsg) {
-        const statusUsers = getUsersWithNotification('notify_status');
+        const statusUsers = await getUsersWithNotification('notify_status');
         console.log(`[Cron] Broadcasting status changes to ${statusUsers.length} users`);
         await broadcast(bot, statusUsers, statusMsg);
       }
@@ -141,14 +141,14 @@ function startScheduler(bot, adminChatId) {
       // === Per-user watchlist price/status notifications ===
       // Group changes by user — each user only gets notified about THEIR watched players
       if (watchedPriceChanges.length > 0 || watchedStatusChanges.length > 0) {
-        const watchlistUsers = getUsersWithNotification('notify_watchlist');
+        const watchlistUsers = await getUsersWithNotification('notify_watchlist');
         const watchlistUserSet = new Set(watchlistUsers);
 
         // Build per-user notification
         const userNotifs = {}; // chatId -> { priceChanges: [], statusChanges: [] }
 
         for (const change of watchedPriceChanges) {
-          const watchers = getUsersWatchingPlayer(change.playerId);
+          const watchers = await getUsersWatchingPlayer(change.playerId);
           for (const chatId of watchers) {
             if (!watchlistUserSet.has(chatId)) continue;
             if (!userNotifs[chatId]) userNotifs[chatId] = { priceChanges: [], statusChanges: [] };
@@ -156,7 +156,7 @@ function startScheduler(bot, adminChatId) {
           }
         }
         for (const change of watchedStatusChanges) {
-          const watchers = getUsersWatchingPlayer(change.playerId);
+          const watchers = await getUsersWatchingPlayer(change.playerId);
           for (const chatId of watchers) {
             if (!watchlistUserSet.has(chatId)) continue;
             if (!userNotifs[chatId]) userNotifs[chatId] = { priceChanges: [], statusChanges: [] };
@@ -206,7 +206,7 @@ function startScheduler(bot, adminChatId) {
         .sort((a, b) => b.scoring.differentialScore - a.scoring.differentialScore);
 
       const msg = fmt.rankingList(diffs, '💎 Differential Picks Minggu Ini', 15);
-      const diffUsers = getUsersWithNotification('notify_differentials');
+      const diffUsers = await getUsersWithNotification('notify_differentials');
       if (diffUsers.length > 0) {
         console.log(`[Cron] Broadcasting differentials to ${diffUsers.length} users`);
         await broadcast(bot, diffUsers, msg);
@@ -224,7 +224,7 @@ function startScheduler(bot, adminChatId) {
   cron.schedule('0 2 * * *', async () => {
     console.log('[Cron] Sending watchlist daily updates...');
     try {
-      const watchlistUsers = getUsersWithNotification('notify_watchlist');
+      const watchlistUsers = await getUsersWithNotification('notify_watchlist');
       if (watchlistUsers.length === 0) return;
 
       const data = await fetchAll();
@@ -232,7 +232,7 @@ function startScheduler(bot, adminChatId) {
 
       let sentCount = 0;
       for (const chatId of watchlistUsers) {
-        const watchlist = getWatchlist(chatId);
+        const watchlist = await getWatchlist(chatId);
         if (watchlist.length === 0) continue;
 
         const lines = ['<b>👁 Watchlist Daily Update</b>\n'];

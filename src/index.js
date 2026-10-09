@@ -8,7 +8,7 @@ const { registerCommands } = require('./commands');
 const { registerAdminCommands } = require('./admin');
 const { startScheduler } = require('./scheduler');
 const { restoreSessions } = require('./fpl-api');
-const { getAllFplTokens } = require('./database');
+const { getAllFplTokens, initDb } = require('./database');
 const webRoutes = require('./web/routes');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -48,6 +48,9 @@ app.use(express.json());
 // Start
 async function main() {
   try {
+    // Initialize MySQL database tables
+    await initDb();
+    console.log('✅ Database connected');
     if (WEBHOOK_DOMAIN) {
       // === WEBHOOK MODE (Railway/Render/Production) ===
       const webhookSecret = process.env.WEBHOOK_SECRET || crypto.randomBytes(32).toString('hex');
@@ -91,7 +94,7 @@ async function main() {
 
     // Restore FPL sessions from DB
     try {
-      const tokens = getAllFplTokens();
+      const tokens = await getAllFplTokens();
       if (tokens.length > 0) restoreSessions(tokens);
     } catch (err) {
       console.error('FPL session restore warning:', err.message);

@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { fetchManagerInfo, fetchManagerPicks, fetchBootstrap, fetchFixtures, fetchManagerTransfers, fetchMyTeam, getUserSession, startAuthCodeFlow, exchangeAuthCode, clearUserSession } = require('../fpl-api');
 const { getScoredPlayers, findPlayer } = require('../commands');
-const { getUser, getUserStats, createWebUser, getWebUserByEmail, getWebUserById, updateWebUserLogin, updateWebUserTier, updateWebUserFplId } = require('../database');
+const { getUser, getUserStats, createWebUser, getWebUserByEmail, getWebUserById, updateWebUserLogin, updateWebUserTier, updateWebUserFplId, getPool } = require('../database');
 const { getMetrics } = require('../monitor');
 const { POSITION_NAMES } = require('../config');
 const { generateExpertPicks, summarizePlayer } = require('../expert-picks');
@@ -58,7 +58,7 @@ function verifyToken(token) {
   }
 }
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
   const data = verifyToken(token);
@@ -118,7 +118,7 @@ router.get('/api/squad/:managerId', authMiddleware, async (req, res) => {
     //    Check if web user has a linked FPL session, or fallback to owner session
     let liveSessionId = null;
     if (req.userId) {
-      const webUser = getWebUserById(req.userId);
+      const webUser = await getWebUserById(req.userId);
       if (webUser?.fpl_id === managerId) {
         liveSessionId = `web_${req.userId}`;
       }
@@ -630,15 +630,15 @@ router.post('/api/auth/register', async (req, res) => {
     if (password.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Format email tidak valid' });
 
-    const existing = getWebUserByEmail(email);
+    const existing = await getWebUserByEmail(email);
     if (existing) return res.status(409).json({ error: 'Email sudah terdaftar. Silakan login.' });
 
     const passwordHash = hashPassword(password);
-    const result = createWebUser(email, passwordHash, name, fplId || null);
+    const result = await createWebUser(email, passwordHash, name, fplId || null);
     if (!result?.lastInsertRowid) {
       return res.status(500).json({ error: 'Gagal membuat user' });
     }
-    const user = getWebUserById(result.lastInsertRowid);
+    const user = await getWebUserById(result.lastInsertRowid);
     if (!user) {
       return res.status(500).json({ error: 'Gagal membuat user' });
     }
@@ -656,14 +656,14 @@ router.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' });
 
-    const user = getWebUserByEmail(email);
+    const user = await getWebUserByEmail(email);
     if (!user) return res.status(401).json({ error: 'Email atau password salah' });
 
     if (!verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: 'Email atau password salah' });
     }
 
-    updateWebUserLogin(user.id);
+    await updateWebUserLogin(user.id);
     const token = generateToken(user.id);
 
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, fplId: user.fpl_id, tier: user.tier } });
@@ -673,18 +673,18 @@ router.post('/api/auth/login', async (req, res) => {
   }
 });
 
-router.get('/api/auth/me', authMiddleware, (req, res) => {
+router.get('/api/auth/me', authMiddleware, async (req, res) => {
   if (!req.userId) return res.status(401).json({ error: 'Tidak terautentikasi' });
-  const user = getWebUserById(req.userId);
+  const user = await getWebUserById(req.userId);
   if (!user) return res.status(401).json({ error: 'User tidak ditemukan' });
   res.json({ id: user.id, email: user.email, name: user.name, fplId: user.fpl_id, tier: user.tier });
 });
 
-router.post('/api/auth/update', authMiddleware, (req, res) => {
+router.post('/api/auth/update', authMiddleware, async (req, res) => {
   if (!req.userId) return res.status(401).json({ error: 'Tidak terautentikasi' });
   const { fplId } = req.body;
-  if (fplId != null) updateWebUserFplId(req.userId, parseInt(fplId) || null);
-  const user = getWebUserById(req.userId);
+  if (fplId != null) await updateWebUserFplId(req.userId, parseInt(fplId) || null);
+  const user = await getWebUserById(req.userId);
   res.json({ id: user.id, email: user.email, name: user.name, fplId: user.fpl_id, tier: user.tier });
 });
 
@@ -736,15 +736,15 @@ router.post('/api/fpl/disconnect', authMiddleware, (req, res) => {
 
 // ===== ADMIN ENDPOINTS =====
 // List all web users (admin only — protected by ADMIN_KEY env var)
-router.get('/api/admin/users', (req, res) => {
+router.get('/api/admin/users', async (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
   const provided = req.headers['x-admin-key'] || req.query.key;
   if (!adminKey || provided !== adminKey) {
     return res.status(403).json({ error: 'Unauthorized' });
   }
   try {
-    const db = require('../database').getDb();
-    const users = db.prepare('SELECT id, email, name, fpl_id, tier, created_at, last_login FROM web_users ORDER BY created_at DESC').all();
+    const pool = getPool();
+    const [users] = await pool.execute('SELECT id, email, name, fpl_id, tier, created_at, last_login FROM web_users ORDER BY created_at DESC');
     res.json({ users });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -752,7 +752,7 @@ router.get('/api/admin/users', (req, res) => {
 });
 
 // Set user tier (admin only)
-router.post('/api/admin/set-tier', (req, res) => {
+router.post('/api/admin/set-tier', async (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
   const provided = req.headers['x-admin-key'] || req.query.key;
   if (!adminKey || provided !== adminKey) {
@@ -763,8 +763,8 @@ router.post('/api/admin/set-tier', (req, res) => {
     return res.status(400).json({ error: 'Invalid userId or tier' });
   }
   try {
-    updateWebUserTier(userId, tier);
-    const user = getWebUserById(userId);
+    await updateWebUserTier(userId, tier);
+    const user = await getWebUserById(userId);
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ error: err.message });

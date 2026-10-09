@@ -7,8 +7,6 @@ RUN npm ci --omit=dev
 
 COPY . .
 
-RUN mkdir -p data
-
 # Run as non-root user
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
     && chown -R appuser:appgroup /app

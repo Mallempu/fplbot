@@ -121,8 +121,8 @@ function posIdFromStr(str) {
 const PUBLIC_COMMANDS = ['start', 'myid', 'help', 'lang', 'pricing'];
 
 // Ambil FPL ID user: dari registered user atau fallback ke env (owner)
-function getUserFplId(ctx) {
-  const user = getUser(ctx.from.id);
+async function getUserFplId(ctx) {
+  const user = await getUser(ctx.from.id);
   if (user?.fpl_id) return user.fpl_id;
   if (isOwner(ctx) && process.env.FPL_ID) return parseInt(process.env.FPL_ID);
   return null;
@@ -133,7 +133,7 @@ function registerCommands(bot) {
   // =====================
   // MIDDLEWARE: Cek registrasi + tracking aktivitas
   // =====================
-  bot.use((ctx, next) => {
+  bot.use(async (ctx, next) => {
     if (!ctx.message?.text) return next();
 
     const text = ctx.message.text;
@@ -144,7 +144,7 @@ function registerCommands(bot) {
 
     // Rate limit check (owner exempt)
     if (!isOwner(ctx) && isRateLimited(ctx.from.id)) {
-      const lang = getUserLang(ctx.from.id);
+      const lang = await getUserLang(ctx.from.id);
       return ctx.reply(t(lang, 'rate_limited'));
     }
 
@@ -153,20 +153,20 @@ function registerCommands(bot) {
       // Track aktivitas owner juga
       if (command) {
         trackCommand(command);
-        try { updateUserActivity(ctx.from.id, command, text.replace(/^\/\S+\s*/, '').trim() || null); } catch {}
+        try { await updateUserActivity(ctx.from.id, command, text.replace(/^\/\S+\s*/, '').trim() || null); } catch {}
       }
       return next();
     }
 
     // Cek registrasi
-    const user = getUser(ctx.from.id);
+    const user = await getUser(ctx.from.id);
     if (!user) {
       const lang = ctx.from.language_code?.startsWith('en') ? 'en' : 'id';
       return ctx.replyWithHTML(t(lang, 'need_register', ctx.from.first_name || 'Sobat FPL'));
     }
 
     // Tier check — pro commands gated
-    const userTier = getUserTier(ctx.from.id);
+    const userTier = await getUserTier(ctx.from.id);
     if (command && !isCommandAllowed(userTier, command)) {
       return ctx.replyWithHTML(formatUpgradeMessage(command, userTier));
     }
@@ -174,7 +174,7 @@ function registerCommands(bot) {
     // Track aktivitas user terdaftar
     if (command) {
       trackCommand(command);
-      try { updateUserActivity(ctx.from.id, command, text.replace(/^\/\S+\s*/, '').trim() || null); } catch {}
+      try { await updateUserActivity(ctx.from.id, command, text.replace(/^\/\S+\s*/, '').trim() || null); } catch {}
     }
 
     return next();
@@ -184,7 +184,7 @@ function registerCommands(bot) {
   // /start — Welcome & Registrasi
   // =====================
   bot.command('start', async ctx => {
-    const user = getUser(ctx.from.id);
+    const user = await getUser(ctx.from.id);
     const arg = ctx.message.text.replace(/^\/start\s*/i, '').trim();
 
     // Cek apakah ada FPL ID di argumen (registrasi atau update)
@@ -197,7 +197,7 @@ function registerCommands(bot) {
       // Validasi FPL ID
       try {
         const manager = await fetchManagerInfo(fplId);
-        registerUser(ctx.from.id, fplId, ctx);
+        await registerUser(ctx.from.id, fplId, ctx);
 
         const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return ctx.replyWithHTML([
@@ -625,9 +625,9 @@ function registerCommands(bot) {
 
     try {
       const chatId = ctx.from.id;
-      const tier = getUserTier(chatId);
+      const tier = await getUserTier(chatId);
       const limit = getWatchlistLimit(tier);
-      const count = getWatchlistCount(chatId);
+      const count = await getWatchlistCount(chatId);
       if (count >= limit) {
         return ctx.reply(`❌ Watchlist penuh (maks ${limit} pemain). Hapus pemain dulu dengan /unwatch.${tier === 'free' ? '\n\n💡 Upgrade ke Pro untuk watchlist sampai 20 pemain.' : ''}`);
       }
@@ -639,7 +639,7 @@ function registerCommands(bot) {
         return ctx.reply(`❌ Pemain "${query}" tidak ditemukan atau ambigu.`);
       }
 
-      addToWatchlist(chatId, result.id, result.web_name);
+      await addToWatchlist(chatId, result.id, result.web_name);
       ctx.reply(`✅ ${result.web_name} ditambahkan ke watchlist kamu. (${count + 1}/${limit})`);
     } catch (err) {
       console.error('Error /watch:', err.message);
@@ -660,7 +660,7 @@ function registerCommands(bot) {
         return ctx.reply(`❌ Pemain "${query}" tidak ditemukan atau ambigu.`);
       }
 
-      removeFromWatchlist(ctx.from.id, result.id);
+      await removeFromWatchlist(ctx.from.id, result.id);
       ctx.reply(`✅ ${result.web_name} dihapus dari watchlist kamu.`);
     } catch (err) {
       console.error('Error /unwatch:', err.message);
@@ -672,11 +672,11 @@ function registerCommands(bot) {
   bot.command('watchlist', async ctx => {
     try {
       const chatId = ctx.from.id;
-      const list = getWatchlist(chatId);
+      const list = await getWatchlist(chatId);
       if (list.length === 0) return ctx.reply('📋 Watchlist kosong. Gunakan /watch <nama> untuk menambahkan.');
 
       const { scored } = await getScoredPlayers();
-      const wlLimit = getWatchlistLimit(getUserTier(chatId));
+      const wlLimit = getWatchlistLimit(await getUserTier(chatId));
       const lines = [`<b>📋 Watchlist Kamu (${list.length}/${wlLimit})</b>\n`];
       for (const w of list) {
         const p = scored.find(s => s.id === w.player_id);
@@ -701,7 +701,7 @@ function registerCommands(bot) {
   // /squad [FPL ID]
   bot.command('squad', async ctx => {
     const input = ctx.message.text.replace(/^\/squad\s*/i, '').trim();
-    const managerId = parseInt(input) || getUserFplId(ctx);
+    const managerId = parseInt(input) || await getUserFplId(ctx);
     if (!managerId || isNaN(managerId)) {
       return ctx.replyWithHTML(
         'FPL ID belum terdaftar.\n\n' +
@@ -732,7 +732,7 @@ function registerCommands(bot) {
 
       // 1. Coba ambil live squad via my-team (user harus login dengan akun FPL-nya sendiri)
       const chatId = String(ctx.from.id);
-      const user = getUser(chatId);
+      const user = await getUser(chatId);
       const userFplId = user?.fpl_id;
       // my-team only works with the token owner's own FPL ID
       if (managerId === userFplId && getUserSession(chatId)) {
@@ -820,7 +820,7 @@ function registerCommands(bot) {
   // /best11 [FPL ID]
   bot.command('best11', async ctx => {
     const input = ctx.message.text.replace(/^\/best11\s*/i, '').trim();
-    const managerId = parseInt(input) || getUserFplId(ctx);
+    const managerId = parseInt(input) || await getUserFplId(ctx);
     if (!managerId || isNaN(managerId)) {
       return ctx.replyWithHTML(
         'FPL ID belum terdaftar.\n\n' +
@@ -844,7 +844,7 @@ function registerCommands(bot) {
       let displayGw = currentGw;
 
       const chatId = String(ctx.from.id);
-      const user = getUser(chatId);
+      const user = await getUser(chatId);
       const userFplId = user?.fpl_id;
       if (managerId === userFplId && getUserSession(chatId)) {
         try {
@@ -1002,7 +1002,7 @@ function registerCommands(bot) {
   // /suggest [FPL ID]
   bot.command('suggest', async ctx => {
     const input = ctx.message.text.replace(/^\/suggest\s*/i, '').trim();
-    const managerId = parseInt(input) || getUserFplId(ctx);
+    const managerId = parseInt(input) || await getUserFplId(ctx);
     if (!managerId || isNaN(managerId)) {
       return ctx.replyWithHTML(
         'FPL ID belum terdaftar.\n\n' +
@@ -1030,7 +1030,7 @@ function registerCommands(bot) {
 
       // Try live squad via per-user session
       const chatId = String(ctx.from.id);
-      const user = getUser(chatId);
+      const user = await getUser(chatId);
       const userFplId = user?.fpl_id;
       if (managerId === userFplId && getUserSession(chatId)) {
         try {
@@ -1524,9 +1524,9 @@ function registerCommands(bot) {
   });
 
   // /settings — Notifikasi & preferensi user
-  bot.command('settings', ctx => {
+  bot.command('settings', async ctx => {
     const chatId = ctx.from.id;
-    const prefs = getUserPreferences(chatId);
+    const prefs = await getUserPreferences(chatId);
     const args = ctx.message.text.replace(/^\/settings\s*/i, '').trim().toLowerCase();
 
     // Toggle a preference
@@ -1547,14 +1547,14 @@ function registerCommands(bot) {
 
       const currentVal = prefs[prefKey];
       const newVal = currentVal ? 0 : 1;
-      updateUserPreference(chatId, prefKey, newVal);
+      await updateUserPreference(chatId, prefKey, newVal);
       const label = newVal ? '✅ ON' : '❌ OFF';
       return ctx.reply(`${label} — Notifikasi ${args} ${newVal ? 'diaktifkan' : 'dinonaktifkan'}.`);
     }
 
     // Show current preferences
     const on = (v) => v ? '✅ ON' : '❌ OFF';
-    const tier = getUserTier(chatId);
+    const tier = await getUserTier(chatId);
     const tierInfo = formatTierInfo(tier);
     const wlLimit = getWatchlistLimit(tier);
     ctx.replyWithHTML([
@@ -1573,7 +1573,7 @@ function registerCommands(bot) {
       '<code>/settings watchlist</code> — Toggle watchlist',
       '<code>/settings differentials</code> — Toggle differentials',
       '',
-      `📋 Watchlist: ${getWatchlistCount(chatId)}/${wlLimit} pemain`,
+      `📋 Watchlist: ${await getWatchlistCount(chatId)}/${wlLimit} pemain`,
       tier === 'free' ? '\n💡 /pricing — lihat paket upgrade' : '',
     ].join('\n'));
   });
@@ -1584,10 +1584,10 @@ function registerCommands(bot) {
   });
 
   // /lang — Ubah bahasa (ID/EN)
-  bot.command('lang', ctx => {
+  bot.command('lang', async ctx => {
     const chatId = ctx.from.id;
     const arg = ctx.message.text.replace(/^\/lang\s*/i, '').trim().toLowerCase();
-    const currentLang = getUserLang(chatId);
+    const currentLang = await getUserLang(chatId);
 
     if (!arg) {
       return ctx.replyWithHTML(t(currentLang, 'lang_usage'));
@@ -1598,14 +1598,14 @@ function registerCommands(bot) {
       return ctx.replyWithHTML(t(currentLang, 'lang_usage'));
     }
 
-    setUserLang(chatId, arg);
+    await setUserLang(chatId, arg);
     ctx.replyWithHTML(t(arg, 'lang_changed', arg));
   });
 
   // /delete_account — Hapus akun sendiri dan semua data
-  bot.command('delete_account', ctx => {
+  bot.command('delete_account', async ctx => {
     const { Markup } = require('telegraf');
-    const user = getUser(ctx.from.id);
+    const user = await getUser(ctx.from.id);
     if (!user) return ctx.reply('❌ Kamu belum terdaftar.');
 
     ctx.replyWithHTML(
@@ -1623,15 +1623,15 @@ function registerCommands(bot) {
     );
   });
 
-  bot.action('confirm_delete_account', ctx => {
+  bot.action('confirm_delete_account', async ctx => {
     ctx.answerCbQuery();
     const chatId = ctx.from.id;
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     if (!user) {
       return ctx.editMessageText('❌ Akun tidak ditemukan.');
     }
     clearUserSession(String(chatId));
-    deleteUser(chatId);
+    await deleteUser(chatId);
     ctx.editMessageText(
       '✅ Akun dan semua data kamu berhasil dihapus.\n\n' +
       'Kamu bisa mendaftar lagi kapan saja dengan /start <FPL ID>.'
@@ -1644,14 +1644,14 @@ function registerCommands(bot) {
   });
 
   // /export_data — Export semua data user
-  bot.command('export_data', ctx => {
+  bot.command('export_data', async ctx => {
     const chatId = ctx.from.id;
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     if (!user) return ctx.reply('❌ Kamu belum terdaftar.');
 
-    const watchlist = getWatchlist(chatId);
-    const prefs = getUserPreferences(chatId);
-    const activity = getUserActivity(chatId, 100);
+    const watchlist = await getWatchlist(chatId);
+    const prefs = await getUserPreferences(chatId);
+    const activity = await getUserActivity(chatId, 100);
 
     const exportData = {
       exported_at: new Date().toISOString(),
@@ -1743,7 +1743,7 @@ function registerCommands(bot) {
   });
 
   // /users — Dashboard user lengkap (owner only)
-  bot.command('users', ctx => {
+  bot.command('users', async ctx => {
     if (!isOwner(ctx)) return ctx.reply('🚫 Hanya pemilik bot (@Abulkhaer).');
 
     const args = ctx.message.text.replace(/^\/users\s*/i, '').trim();
@@ -1751,10 +1751,10 @@ function registerCommands(bot) {
     // /users <chat_id> — Detail user tertentu
     if (args) {
       const targetId = args;
-      const user = getUser(targetId);
+      const user = await getUser(targetId);
       if (!user) return ctx.reply(`❌ User dengan ID ${targetId} tidak ditemukan.`);
 
-      const activity = getUserActivity(targetId, 20);
+      const activity = await getUserActivity(targetId, 20);
       const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const lines = [
         `<b>👤 Detail User</b>\n`,
@@ -1786,8 +1786,8 @@ function registerCommands(bot) {
     }
 
     // /users — Dashboard overview (paginated)
-    const users = getAllUsers(50);
-    const stats = getUserStats();
+    const users = await getAllUsers(50);
+    const stats = await getUserStats();
 
     const lines = [
       `<b>👥 DASHBOARD USER</b>`,
@@ -1836,7 +1836,7 @@ function registerCommands(bot) {
   });
 
   // /removeuser <chat_id> — Hapus user (owner only)
-  bot.command('removeuser', ctx => {
+  bot.command('removeuser', async ctx => {
     if (!isOwner(ctx)) return ctx.reply('🚫 Hanya pemilik bot.');
 
     const targetId = ctx.message.text.replace(/^\/removeuser\s*/i, '').trim();
@@ -1844,11 +1844,11 @@ function registerCommands(bot) {
 
     if (String(targetId) === String(getOwnerId())) return ctx.reply('❌ Tidak bisa menghapus pemilik bot.');
 
-    const user = getUser(targetId);
+    const user = await getUser(targetId);
     if (!user) return ctx.reply(`❌ User ${targetId} tidak ditemukan.`);
 
     clearUserSession(String(targetId));
-    deleteUser(targetId);
+    await deleteUser(targetId);
     ctx.replyWithHTML(
       `✅ User <b>${fmt.escapeHtml(user.first_name || 'Unknown')}</b> (${user.chat_id}) berhasil dihapus.\n` +
       `Data aktivitas juga dihapus.`
@@ -1856,7 +1856,7 @@ function registerCommands(bot) {
   });
 
   // /settier <chat_id> <free|pro|team> — Ubah tier user (owner only)
-  bot.command('settier', ctx => {
+  bot.command('settier', async ctx => {
     if (!isOwner(ctx)) return ctx.reply('🚫 Hanya pemilik bot.');
 
     const args = ctx.message.text.replace(/^\/settier\s*/i, '').trim().split(/\s+/);
@@ -1870,10 +1870,10 @@ function registerCommands(bot) {
       return ctx.reply('❌ Tier harus: free, pro, atau team.');
     }
 
-    const user = getUser(targetId);
+    const user = await getUser(targetId);
     if (!user) return ctx.reply(`❌ User ${targetId} tidak ditemukan.`);
 
-    setUserTier(targetId, tier);
+    await setUserTier(targetId, tier);
     const info = formatTierInfo(tier);
     ctx.replyWithHTML(`✅ Tier <b>${fmt.escapeHtml(user.first_name || targetId)}</b> diubah ke ${info}.`);
 
@@ -1887,11 +1887,11 @@ function registerCommands(bot) {
   });
 
   // /stats — Bot health monitoring dashboard (owner only)
-  bot.command('stats', ctx => {
+  bot.command('stats', async ctx => {
     if (!isOwner(ctx)) return ctx.reply('🚫 Hanya pemilik bot.');
 
     const m = getMetrics();
-    const userStats = getUserStats();
+    const userStats = await getUserStats();
 
     const lines = [
       '<b>📊 BOT HEALTH DASHBOARD</b>',
@@ -2173,10 +2173,10 @@ function registerCommands(bot) {
 
       if (result.success) {
         // Persist token to DB
-        saveFplToken(chatId, result.token, result.refreshToken);
+        await saveFplToken(chatId, result.token, result.refreshToken);
 
         // Test with user's FPL ID
-        const user = getUser(chatId);
+        const user = await getUser(chatId);
         const fplId = user?.fpl_id;
         let teamInfo = '';
         if (fplId) {
@@ -2238,10 +2238,10 @@ function registerCommands(bot) {
 
     setFplSession(token, chatId);
     // Persist to DB
-    saveFplToken(chatId, token, null);
+    await saveFplToken(chatId, token, null);
 
     // Test token with user's FPL ID
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     const fplId = user?.fpl_id;
     if (!fplId) {
       return ctx.replyWithHTML('✅ Token disimpan.\n⚠️ FPL ID belum di-set. Gunakan <code>/start [FPL ID]</code> dulu.');
@@ -2265,7 +2265,7 @@ function registerCommands(bot) {
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) {
         setFplSession(null, chatId);
-        clearFplToken(chatId);
+        await clearFplToken(chatId);
         ctx.reply('❌ Token ditolak (401/403). Pastikan token masih valid dan belum expired.');
       } else {
         ctx.reply('⚠️ Token disimpan tapi gagal test. Coba lagi nanti.');
@@ -2277,7 +2277,7 @@ function registerCommands(bot) {
   bot.command('fpllogout', async ctx => {
     const chatId = String(ctx.from.id);
     clearUserSession(chatId);
-    clearFplToken(chatId);
+    await clearFplToken(chatId);
     ctx.reply('✅ Sesi FPL kamu sudah dihapus. Gunakan /fpllogin untuk login kembali.');
   });
 
@@ -2323,9 +2323,9 @@ function registerCommands(bot) {
       const result = await exchangeAuthCode(text, chatId);
 
       if (result.success) {
-        saveFplToken(chatId, result.token, result.refreshToken);
+        await saveFplToken(chatId, result.token, result.refreshToken);
 
-        const user = getUser(chatId);
+        const user = await getUser(chatId);
         const fplId = user?.fpl_id;
         let teamInfo = '';
         if (fplId) {
@@ -2395,7 +2395,7 @@ function registerCommands(bot) {
 
       // Flag squad/watchlist players if user is registered
       const chatId = String(ctx.from.id);
-      const user = getUser(chatId);
+      const user = await getUser(chatId);
       if (user?.fpl_id) {
         try {
           const { scored: s, currentGw } = await getScoredPlayers();
@@ -2405,7 +2405,7 @@ function registerCommands(bot) {
           try { picks = await fetchManagerPicks(user.fpl_id, nextGw); } catch {}
           if (!picks) try { picks = await fetchManagerPicks(user.fpl_id, currentGw); } catch {}
           const squadIds = picks?.picks?.map(p => p.element) || [];
-          const watchlist = getWatchlist(chatId);
+          const watchlist = await getWatchlist(chatId);
           const watchIds = watchlist.map(w => w.player_id);
           result = flagSquadPlayers(result, squadIds, watchIds);
         } catch {}
@@ -2476,7 +2476,7 @@ function registerCommands(bot) {
   // /plan [managerId] (alias /transferplan)
   const transferPlanHandler = async ctx => {
     const input = ctx.message.text.replace(/^\/(plan|transferplan)\s*/i, '').trim();
-    const managerId = parseInt(input) || getUserFplId(ctx);
+    const managerId = parseInt(input) || await getUserFplId(ctx);
     if (!managerId || isNaN(managerId)) {
       return ctx.replyWithHTML(
         'FPL ID belum terdaftar.\n\n' +
@@ -2526,7 +2526,7 @@ function registerCommands(bot) {
       );
     }
 
-    const managerId = getUserFplId(ctx);
+    const managerId = await getUserFplId(ctx);
     if (!managerId) {
       return ctx.replyWithHTML('FPL ID belum terdaftar. Gunakan <code>/start [FPL ID]</code>');
     }
@@ -2540,7 +2540,7 @@ function registerCommands(bot) {
       // Get squad
       let picks;
       const chatId = String(ctx.from.id);
-      const user = getUser(chatId);
+      const user = await getUser(chatId);
       if (managerId === user?.fpl_id && getUserSession(chatId)) {
         try {
           const myTeam = await fetchMyTeam(managerId, chatId);
